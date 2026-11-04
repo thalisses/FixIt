@@ -1,0 +1,16 @@
+.git/
+.agents/
+node_modules/
+**/node_modules/
+**/dist/
+**/coverage/
+**/*.tsbuildinfo
+docs/
+tasks/
+*.pdf
+.env
+.env.*
+!.env.example
+README.md
+CAPABILITY-MAP.md
+SPEC-*.md
