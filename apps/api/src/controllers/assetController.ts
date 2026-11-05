@@ -17,23 +17,10 @@ function sendValidationError(response: Response, error: z.ZodError): void {
       (messages as string[] | undefined)?.at(0),
     ]),
   );
-  response
-    .status(400)
-    .json({ error: formErrors.at(0) ?? "Dados inválidos.", fields });
-}
-
-function sendValidationError(response: Response, error: z.ZodError): void {
-  const { fieldErrors } = z.flattenError(error);
-  const fields = Object.fromEntries(
-    Object.entries(fieldErrors).map(([field, messages]) => [
-      field,
-      (messages as string[] | undefined)?.at(0),
-    ]),
-  );
   response.status(422).json({
     error: {
       code: "VALIDATION_ERROR",
-      message: "Dados do bem patrimonial inválidos.",
+      message: formErrors.at(0) ?? "Dados do bem patrimonial inválidos.",
       fields,
     },
   });
@@ -53,7 +40,8 @@ export function createAssetController(service: AssetService) {
       }
 
       try {
-        response.status(200).json(await service.search(parsed.data.busca));
+        const assets = await service.search(parsed.data.busca);
+        response.status(200).json({ data: assets });
       } catch (error) {
         next(error);
       }
@@ -108,11 +96,16 @@ export function createAssetController(service: AssetService) {
       try {
         const asset = await service.update(id.data.id, changes.data);
         if (!asset) {
-          response.status(404).json({ error: "Bem patrimonial não encontrado." });
+          response.status(404).json({
+            error: {
+              code: "ASSET_NOT_FOUND",
+              message: "Bem patrimonial não encontrado.",
+            },
+          });
           return;
         }
 
-        response.status(200).json(asset);
+        response.status(200).json({ data: { asset } });
       } catch (error) {
         next(error);
       }

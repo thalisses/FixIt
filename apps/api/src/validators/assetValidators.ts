@@ -34,7 +34,7 @@ export const newAssetSchema = z.object(
     dataAquisicao: optionalDate("Data de aquisição"),
     garantia: optionalDate("Garantia"),
   },
-  { error: "Dados inválidos." },
+  { error: "Dados do bem patrimonial inválidos." },
 );
 
 const INVALID_ID = "Identificador inválido.";
@@ -54,7 +54,7 @@ export const assetChangesSchema = z
       localizacao: localizacao.optional(),
       estadoConservacao: estadoConservacao.optional(),
     },
-    { error: "Dados inválidos." },
+    { error: "Dados do bem patrimonial inválidos." },
   )
   .refine((changes) => Object.keys(changes).length > 0, {
     error: "Informe a localização ou o estado de conservação.",

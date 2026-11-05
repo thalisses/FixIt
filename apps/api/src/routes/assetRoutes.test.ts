@@ -253,25 +253,25 @@ describe("POST /api/assets", () => {
   });
 });
 
-describe("GET /assets", () => {
+describe("GET /api/assets", () => {
   it("answers an empty list when nothing is registered", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
-    const response = await fetch(`${baseUrl}/assets`);
+    const response = await fetch(`${baseUrl}/api/assets`);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual([]);
+    await expect(response.json()).resolves.toEqual({ data: [] });
   });
 
   it("shows a registered asset in the list (US004 CA1)", async () => {
     const baseUrl = await startServer(createFakeRepository());
     await post(baseUrl, JSON.stringify(projetor));
 
-    const response = await fetch(`${baseUrl}/assets`);
+    const response = await fetch(`${baseUrl}/api/assets`);
 
-    await expect(response.json()).resolves.toMatchObject([
-      { codigoPatrimonial: "PAT-1" },
-    ]);
+    await expect(response.json()).resolves.toMatchObject({
+      data: [{ codigoPatrimonial: "PAT-1" }],
+    });
   });
 
   it("searches by code or description, ignoring surrounding spaces (CA1)", async () => {
@@ -286,37 +286,40 @@ describe("GET /assets", () => {
       }),
     );
 
-    const byDescription = await fetch(`${baseUrl}/assets?busca=%20dell%20`);
-    const byCode = await fetch(`${baseUrl}/assets?busca=pat-1`);
+    const byDescription = await fetch(`${baseUrl}/api/assets?busca=%20dell%20`);
+    const byCode = await fetch(`${baseUrl}/api/assets?busca=pat-1`);
 
-    await expect(byDescription.json()).resolves.toMatchObject([
-      { codigoPatrimonial: "PAT-2" },
-    ]);
-    await expect(byCode.json()).resolves.toMatchObject([
-      { codigoPatrimonial: "PAT-1" },
-    ]);
+    await expect(byDescription.json()).resolves.toMatchObject({
+      data: [{ codigoPatrimonial: "PAT-2" }],
+    });
+    await expect(byCode.json()).resolves.toMatchObject({
+      data: [{ codigoPatrimonial: "PAT-1" }],
+    });
   });
 
   it("refuses a repeated search parameter", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
-    const response = await fetch(`${baseUrl}/assets?busca=a&busca=b`);
+    const response = await fetch(`${baseUrl}/api/assets?busca=a&busca=b`);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Dados inválidos.",
-      fields: { busca: "Busca inválida." },
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: { busca: "Busca inválida." },
+      },
     });
   });
 });
 
-describe("PATCH /assets/:id", () => {
+describe("PATCH /api/assets/:id", () => {
   function patch(
     baseUrl: string,
     id: string,
     body: Record<string, unknown>,
   ): Promise<Response> {
-    return fetch(`${baseUrl}/assets/${id}`, {
+    return fetch(`${baseUrl}/api/assets/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -334,10 +337,14 @@ describe("PATCH /assets/:id", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      id: 1,
-      codigoPatrimonial: "PAT-1",
-      localizacao: "Bloco A, sala 3",
-      estadoConservacao: "RUIM",
+      data: {
+        asset: {
+          id: 1,
+          codigoPatrimonial: "PAT-1",
+          localizacao: "Bloco A, sala 3",
+          estadoConservacao: "RUIM",
+        },
+      },
     });
   });
 
@@ -348,8 +355,12 @@ describe("PATCH /assets/:id", () => {
     const response = await patch(baseUrl, "1", { estadoConservacao: "REGULAR" });
 
     await expect(response.json()).resolves.toMatchObject({
-      localizacao: projetor.localizacao,
-      estadoConservacao: "REGULAR",
+      data: {
+        asset: {
+          localizacao: projetor.localizacao,
+          estadoConservacao: "REGULAR",
+        },
+      },
     });
   });
 
@@ -363,8 +374,7 @@ describe("PATCH /assets/:id", () => {
     });
 
     await expect(response.json()).resolves.toMatchObject({
-      codigoPatrimonial: "PAT-1",
-      localizacao: "Sala 9",
+      data: { asset: { codigoPatrimonial: "PAT-1", localizacao: "Sala 9" } },
     });
   });
 
@@ -375,7 +385,10 @@ describe("PATCH /assets/:id", () => {
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
-      error: "Bem patrimonial não encontrado.",
+      error: {
+        code: "ASSET_NOT_FOUND",
+        message: "Bem patrimonial não encontrado.",
+      },
     });
   });
 
@@ -384,10 +397,13 @@ describe("PATCH /assets/:id", () => {
 
     const response = await patch(baseUrl, "abc", { localizacao: "Sala 9" });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Dados inválidos.",
-      fields: { id: "Identificador inválido." },
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: { id: "Identificador inválido." },
+      },
     });
   });
 
@@ -397,10 +413,13 @@ describe("PATCH /assets/:id", () => {
 
     const response = await patch(baseUrl, "1", { descricao: "Outra" });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Informe a localização ou o estado de conservação.",
-      fields: {},
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Informe a localização ou o estado de conservação.",
+        fields: {},
+      },
     });
   });
 
@@ -413,12 +432,15 @@ describe("PATCH /assets/:id", () => {
       estadoConservacao: "OTIMO",
     });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Dados inválidos.",
-      fields: {
-        localizacao: "Localização é obrigatória.",
-        estadoConservacao: "Estado de conservação inválido.",
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: {
+          localizacao: "Localização é obrigatória.",
+          estadoConservacao: "Estado de conservação inválido.",
+        },
       },
     });
   });
