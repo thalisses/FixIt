@@ -57,6 +57,10 @@ function createFakeRepository(): AssetRepository & { assets: Asset[] } {
           descricao.toLowerCase().includes(text),
       );
     },
+    async update(id, changes) {
+      const asset = assets.find((candidate) => candidate.id === id);
+      return asset ? Object.assign(asset, changes) : null;
+    },
   };
 }
 
@@ -199,6 +203,7 @@ describe("POST /assets", () => {
         throw new Error("connection to 10.0.0.5 refused");
       },
       search: async () => [],
+      update: async () => null,
     });
 
     const response = await post(baseUrl, JSON.stringify(projetor));
@@ -263,6 +268,120 @@ describe("GET /assets", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Dados inválidos.",
       fields: { busca: "Busca inválida." },
+    });
+  });
+});
+
+describe("PATCH /assets/:id", () => {
+  function patch(
+    baseUrl: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<Response> {
+    return fetch(`${baseUrl}/assets/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("changes the location and the condition (CA2)", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", {
+      localizacao: "Bloco A, sala 3",
+      estadoConservacao: "RUIM",
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: 1,
+      codigoPatrimonial: "PAT-1",
+      localizacao: "Bloco A, sala 3",
+      estadoConservacao: "RUIM",
+    });
+  });
+
+  it("keeps the fields that were not sent", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", { estadoConservacao: "REGULAR" });
+
+    await expect(response.json()).resolves.toMatchObject({
+      localizacao: projetor.localizacao,
+      estadoConservacao: "REGULAR",
+    });
+  });
+
+  it("ignores fields that this edit does not cover", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", {
+      codigoPatrimonial: "OUTRO",
+      localizacao: "Sala 9",
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      codigoPatrimonial: "PAT-1",
+      localizacao: "Sala 9",
+    });
+  });
+
+  it("answers 404 for an asset that does not exist", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+
+    const response = await patch(baseUrl, "99", { localizacao: "Sala 9" });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Bem patrimonial não encontrado.",
+    });
+  });
+
+  it("refuses an invalid id", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+
+    const response = await patch(baseUrl, "abc", { localizacao: "Sala 9" });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Dados inválidos.",
+      fields: { id: "Identificador inválido." },
+    });
+  });
+
+  it("refuses an edit without any supported field", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", { descricao: "Outra" });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Informe a localização ou o estado de conservação.",
+      fields: {},
+    });
+  });
+
+  it("refuses a blank location and a condition outside the list", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", {
+      localizacao: "  ",
+      estadoConservacao: "OTIMO",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Dados inválidos.",
+      fields: {
+        localizacao: "Localização é obrigatória.",
+        estadoConservacao: "Estado de conservação inválido.",
+      },
     });
   });
 });

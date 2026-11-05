@@ -26,6 +26,9 @@ function createFakeRepository(): AssetRepository {
     async search() {
       return assets;
     },
+    async update() {
+      return null;
+    },
   };
 }
 

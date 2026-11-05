@@ -12,9 +12,14 @@ export interface NewAsset {
   garantia: string | null;
 }
 
+export type AssetChanges = Partial<
+  Pick<NewAsset, "localizacao" | "estadoConservacao">
+>;
+
 export interface AssetRepository {
   create(asset: NewAsset): Promise<Asset>;
   search(term?: string): Promise<Asset[]>;
+  update(id: number, changes: AssetChanges): Promise<Asset | null>;
 }
 
 export class DuplicateCodigoPatrimonialError extends Error {
@@ -59,6 +64,15 @@ export function createAssetRepository(dataSource: DataSource): AssetRepository {
         where: [{ codigoPatrimonial: pattern }, { descricao: pattern }],
         order: { codigoPatrimonial: "ASC" },
       });
+    },
+
+    async update(id, changes) {
+      const asset = await repository.findOneBy({ id });
+      if (!asset) {
+        return null;
+      }
+
+      return repository.save(repository.merge(asset, changes));
     },
   };
 }

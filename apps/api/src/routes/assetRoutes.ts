@@ -35,5 +35,12 @@ export function createAssetRoutes(service: AssetService): Router {
     handleAssetRouteError,
   );
 
+  router.patch(
+    "/assets/:id",
+    express.json(),
+    controller.update,
+    handleAssetRouteError,
+  );
+
   return router;
 }
