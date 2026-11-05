@@ -3,6 +3,7 @@ import type { AssetRepository, NewAsset } from "../repositories/assetRepository.
 
 export interface AssetService {
   register(asset: NewAsset): Promise<Asset>;
+  search(term?: string): Promise<Asset[]>;
 }
 
 export function createAssetService(repository: AssetRepository): AssetService {
@@ -12,6 +13,10 @@ export function createAssetService(repository: AssetRepository): AssetService {
         ...asset,
         codigoPatrimonial: asset.codigoPatrimonial.trim(),
       });
+    },
+
+    search(term) {
+      return repository.search(term);
     },
   };
 }

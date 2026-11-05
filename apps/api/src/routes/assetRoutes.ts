@@ -27,6 +27,7 @@ export function createAssetRoutes(service: AssetService): Router {
   const router = Router();
   const controller = createAssetController(service);
 
+  router.get("/assets", controller.list, handleAssetRouteError);
   router.post(
     "/assets",
     express.json(),

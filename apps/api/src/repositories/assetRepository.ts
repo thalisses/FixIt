@@ -1,4 +1,4 @@
-import { QueryFailedError, type DataSource } from "typeorm";
+import { ILike, QueryFailedError, type DataSource } from "typeorm";
 import { Asset, type EstadoConservacao } from "../entities/Asset.js";
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
@@ -14,6 +14,7 @@ export interface NewAsset {
 
 export interface AssetRepository {
   create(asset: NewAsset): Promise<Asset>;
+  search(term?: string): Promise<Asset[]>;
 }
 
 export class DuplicateCodigoPatrimonialError extends Error {
@@ -46,6 +47,18 @@ export function createAssetRepository(dataSource: DataSource): AssetRepository {
 
         throw error;
       }
+    },
+
+    search(term) {
+      if (!term) {
+        return repository.find({ order: { codigoPatrimonial: "ASC" } });
+      }
+
+      const pattern = ILike(`%${term.replace(/[\\%_]/g, "\\$&")}%`);
+      return repository.find({
+        where: [{ codigoPatrimonial: pattern }, { descricao: pattern }],
+        order: { codigoPatrimonial: "ASC" },
+      });
     },
   };
 }

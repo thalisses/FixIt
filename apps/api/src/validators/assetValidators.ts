@@ -13,6 +13,13 @@ function optionalDate(label: string) {
     .transform((value) => value ?? null);
 }
 
+export const assetSearchSchema = z.object({
+  busca: z
+    .string({ error: "Busca inválida." })
+    .trim()
+    .optional(),
+});
+
 export const newAssetSchema = z.object({
   codigoPatrimonial: requiredText("Código patrimonial é obrigatório."),
   descricao: requiredText("Descrição é obrigatória."),

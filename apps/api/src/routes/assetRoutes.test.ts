@@ -49,6 +49,14 @@ function createFakeRepository(): AssetRepository & { assets: Asset[] } {
       assets.push(saved);
       return saved;
     },
+    async search(term) {
+      const text = term?.toLowerCase() ?? "";
+      return assets.filter(
+        ({ codigoPatrimonial, descricao }) =>
+          codigoPatrimonial.toLowerCase().includes(text) ||
+          descricao.toLowerCase().includes(text),
+      );
+    },
   };
 }
 
@@ -190,6 +198,7 @@ describe("POST /assets", () => {
       create: async () => {
         throw new Error("connection to 10.0.0.5 refused");
       },
+      search: async () => [],
     });
 
     const response = await post(baseUrl, JSON.stringify(projetor));
@@ -197,6 +206,63 @@ describe("POST /assets", () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
       error: "Erro interno do servidor.",
+    });
+  });
+});
+
+describe("GET /assets", () => {
+  it("answers an empty list when nothing is registered", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+
+    const response = await fetch(`${baseUrl}/assets`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([]);
+  });
+
+  it("shows a registered asset in the list (US004 CA1)", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await fetch(`${baseUrl}/assets`);
+
+    await expect(response.json()).resolves.toMatchObject([
+      { codigoPatrimonial: "PAT-1" },
+    ]);
+  });
+
+  it("searches by code or description, ignoring surrounding spaces (CA1)", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+    await post(
+      baseUrl,
+      JSON.stringify({
+        ...projetor,
+        codigoPatrimonial: "PAT-2",
+        descricao: "Notebook Dell",
+      }),
+    );
+
+    const byDescription = await fetch(`${baseUrl}/assets?busca=%20dell%20`);
+    const byCode = await fetch(`${baseUrl}/assets?busca=pat-1`);
+
+    await expect(byDescription.json()).resolves.toMatchObject([
+      { codigoPatrimonial: "PAT-2" },
+    ]);
+    await expect(byCode.json()).resolves.toMatchObject([
+      { codigoPatrimonial: "PAT-1" },
+    ]);
+  });
+
+  it("refuses a repeated search parameter", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+
+    const response = await fetch(`${baseUrl}/assets?busca=a&busca=b`);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Dados inválidos.",
+      fields: { busca: "Busca inválida." },
     });
   });
 });
