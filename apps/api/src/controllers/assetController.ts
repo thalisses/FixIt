@@ -22,6 +22,23 @@ function sendValidationError(response: Response, error: z.ZodError): void {
     .json({ error: formErrors.at(0) ?? "Dados inválidos.", fields });
 }
 
+function sendValidationError(response: Response, error: z.ZodError): void {
+  const { fieldErrors } = z.flattenError(error);
+  const fields = Object.fromEntries(
+    Object.entries(fieldErrors).map(([field, messages]) => [
+      field,
+      (messages as string[] | undefined)?.at(0),
+    ]),
+  );
+  response.status(422).json({
+    error: {
+      code: "VALIDATION_ERROR",
+      message: "Dados do bem patrimonial inválidos.",
+      fields,
+    },
+  });
+}
+
 export function createAssetController(service: AssetService) {
   return {
     async list(
@@ -55,10 +72,15 @@ export function createAssetController(service: AssetService) {
 
       try {
         const asset = await service.register(parsed.data);
-        response.status(201).json(asset);
+        response.status(201).json({ data: { asset } });
       } catch (error) {
         if (error instanceof DuplicateCodigoPatrimonialError) {
-          response.status(409).json({ error: error.message });
+          response.status(409).json({
+            error: {
+              code: "ASSET_CODE_ALREADY_EXISTS",
+              message: error.message,
+            },
+          });
           return;
         }
 

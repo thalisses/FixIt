@@ -1,20 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { Asset } from "../entities/Asset.js";
-import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAssets.js";
 import { createDataSource } from "./database.js";
+import { Asset } from "../entities/Asset.js";
+import { AuthSession } from "../entities/AuthSession.js";
+import { User } from "../entities/User.js";
+import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAssets.js";
+import { CreateAuthenticationTables1793847279000 } from "../migrations/1793847279000-CreateAuthenticationTables.js";
 
 describe("createDataSource", () => {
-  const { options } = createDataSource(
-    "postgresql://user:password@localhost:5432/test",
-  );
+  it("registers authentication entities and migration without schema synchronization", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
 
-  it("changes the schema only through migrations", () => {
-    expect(options.synchronize).toBe(false);
-    expect(options.migrationsRun).toBe(true);
+    expect(dataSource.options.synchronize).toBe(false);
+    expect(dataSource.options.entities).toEqual(
+      expect.arrayContaining([User, AuthSession]),
+    );
+    expect(dataSource.options.migrations).toContain(
+      CreateAuthenticationTables1793847279000,
+    );
   });
 
   it("registers the asset entity and its migration", () => {
-    expect(options.entities).toContain(Asset);
-    expect(options.migrations).toContain(CreateAssets1793835564779);
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+
+    expect(dataSource.options.entities).toContain(Asset);
+    expect(dataSource.options.migrations).toContain(CreateAssets1793835564779);
   });
 });

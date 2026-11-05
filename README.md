@@ -57,6 +57,38 @@ Para encerrar os containers sem apagar os dados:
 docker compose down
 ```
 
+## Autenticação e perfis
+
+O cadastro público cria uma conta ativa de Cliente. A instituição é obrigatória
+e, no ambiente inicial, corresponde à Universidade Estadual de Maringá (UEM).
+O login cria uma sessão opaca armazenada no servidor; o cookie é `HttpOnly`,
+`SameSite=Lax` e recebe `Secure` em produção.
+
+A API aplica os perfis Cliente, Manutentor e Gestor. Gestores podem listar
+usuários e alterar perfis; a interface confirma a alteração e a API impede
+rebaixar o último Gestor ativo. As políticas de solicitação, ativo e relatório
+estão prontas para serem aplicadas quando esses módulos de domínio forem
+implementados.
+
+Para provisionar o primeiro Gestor, cadastre uma conta pela interface e execute
+o comando abaixo em um terminal interativo. Ele solicita uma senha sem exibi-la
+e só pode ser usado enquanto não houver Gestor ativo:
+
+```sh
+docker compose exec api npm run db:provision-manager --workspace @fixit/api -- gestor@uem.br
+```
+
+O comando usa a conexão configurada no container da API e solicita uma senha
+sem eco. Para aplicar migrations manualmente no Compose:
+
+```sh
+docker compose exec api npm run db:migrate --workspace @fixit/api
+```
+
+A API também aplica migrations antes de aceitar requisições. Em produção,
+configure `WEB_ORIGIN` com a origem HTTPS real e termine TLS na infraestrutura
+de implantação.
+
 ## Migrations
 
 A API aplica as migrations pendentes ao subir. Depois de atualizar a `main`, basta rodar `docker compose up --build`.
@@ -77,6 +109,8 @@ Migration que já entrou na `main` não deve ser editada: crie outra para corrig
 
 ## Escopo atual
 
-Esta fundação contém uma tela inicial, os endpoints de saúde e a conexão ao PostgreSQL. Autenticação e funcionalidades do backlog ainda não fazem parte do escopo.
+Esta fundação contém cadastro, login, sessões, autorização por perfil,
+administração de usuários e provisionamento controlado do primeiro Gestor. As
+rotas de solicitações, ativos e relatórios ainda não foram implementadas.
 
 O mapa de capacidades e as especificações aprovadas estão em [CAPABILITY-MAP.md](CAPABILITY-MAP.md) e nos arquivos `SPEC-*.md`.
