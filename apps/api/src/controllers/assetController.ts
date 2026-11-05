@@ -4,6 +4,23 @@ import { DuplicateCodigoPatrimonialError } from "../repositories/assetRepository
 import type { AssetService } from "../services/assetService.js";
 import { newAssetSchema } from "../validators/assetValidators.js";
 
+function sendValidationError(response: Response, error: z.ZodError): void {
+  const { fieldErrors } = z.flattenError(error);
+  const fields = Object.fromEntries(
+    Object.entries(fieldErrors).map(([field, messages]) => [
+      field,
+      (messages as string[] | undefined)?.at(0),
+    ]),
+  );
+  response.status(422).json({
+    error: {
+      code: "VALIDATION_ERROR",
+      message: "Dados do bem patrimonial inválidos.",
+      fields,
+    },
+  });
+}
+
 export function createAssetController(service: AssetService) {
   return {
     async create(
@@ -13,23 +30,21 @@ export function createAssetController(service: AssetService) {
     ): Promise<void> {
       const parsed = newAssetSchema.safeParse(request.body);
       if (!parsed.success) {
-        const { fieldErrors } = z.flattenError(parsed.error);
-        const fields = Object.fromEntries(
-          Object.entries(fieldErrors).map(([field, messages]) => [
-            field,
-            messages?.at(0),
-          ]),
-        );
-        response.status(400).json({ error: "Dados inválidos.", fields });
+        sendValidationError(response, parsed.error);
         return;
       }
 
       try {
         const asset = await service.register(parsed.data);
-        response.status(201).json(asset);
+        response.status(201).json({ data: { asset } });
       } catch (error) {
         if (error instanceof DuplicateCodigoPatrimonialError) {
-          response.status(409).json({ error: error.message });
+          response.status(409).json({
+            error: {
+              code: "ASSET_CODE_ALREADY_EXISTS",
+              message: error.message,
+            },
+          });
           return;
         }
 

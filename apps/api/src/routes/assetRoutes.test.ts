@@ -3,14 +3,35 @@ import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import type { Asset } from "../entities/Asset.js";
+import { AuthSession } from "../entities/AuthSession.js";
+import { User } from "../entities/User.js";
 import {
   DuplicateCodigoPatrimonialError,
   type AssetRepository,
 } from "../repositories/assetRepository.js";
-import { createAssetService } from "../services/assetService.js";
-import { createAssetRoutes } from "./assetRoutes.js";
+import type { SessionRepository } from "../services/sessionService.js";
+import type { UserManagementRepository } from "../services/userManagementService.js";
+import type { UserRepository } from "../services/userService.js";
 
 let server: Server | undefined;
+
+const userRepository: UserRepository = {
+  create: (input) => Object.assign(new User(), input),
+  findOneBy: async () => null,
+  save: async (user) => user,
+};
+const sessionRepository: SessionRepository = {
+  create: (input) => Object.assign(new AuthSession(), input),
+  save: async (session) => session,
+  findOneByTokenHash: async () => null,
+  findUserById: async () => null,
+};
+const userManagementRepository: UserManagementRepository = {
+  list: async () => ({ users: [], totalItems: 0 }),
+  transaction: async <T>() => {
+    throw new Error("User management is not used in this test.");
+  },
+};
 
 afterEach(async () => {
   const currentServer = server;
@@ -53,9 +74,14 @@ function createFakeRepository(): AssetRepository & { assets: Asset[] } {
 }
 
 async function startServer(repository: AssetRepository): Promise<string> {
-  const routes = createAssetRoutes(createAssetService(repository));
-  const checkDatabase = async () => undefined;
-  server = createApp(checkDatabase, [routes]).listen(0, "127.0.0.1");
+  server = createApp(
+    async () => undefined,
+    userRepository,
+    sessionRepository,
+    userManagementRepository,
+    { secureCookies: false, webOrigin: "http://localhost:5173" },
+    repository,
+  ).listen(0, "127.0.0.1");
   await once(server, "listening");
 
   const address = server.address();
@@ -67,7 +93,7 @@ async function startServer(repository: AssetRepository): Promise<string> {
 }
 
 function post(baseUrl: string, body: string): Promise<Response> {
-  return fetch(`${baseUrl}/assets`, {
+  return fetch(`${baseUrl}/api/assets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
@@ -81,7 +107,7 @@ const projetor = {
   estadoConservacao: "BOM",
 };
 
-describe("POST /assets", () => {
+describe("POST /api/assets", () => {
   it("registers an asset without the optional dates (CA1)", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
@@ -89,10 +115,9 @@ describe("POST /assets", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
-      id: 1,
-      ...projetor,
-      dataAquisicao: null,
-      garantia: null,
+      data: {
+        asset: { id: 1, ...projetor, dataAquisicao: null, garantia: null },
+      },
     });
   });
 
@@ -110,8 +135,9 @@ describe("POST /assets", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
-      dataAquisicao: "2025-03-01",
-      garantia: "2027-03-01",
+      data: {
+        asset: { dataAquisicao: "2025-03-01", garantia: "2027-03-01" },
+      },
     });
   });
 
@@ -127,7 +153,10 @@ describe("POST /assets", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
-      error: "Código patrimonial já cadastrado.",
+      error: {
+        code: "ASSET_CODE_ALREADY_EXISTS",
+        message: "Código patrimonial já cadastrado.",
+      },
     });
     expect(repository.assets).toHaveLength(1);
   });
@@ -138,14 +167,17 @@ describe("POST /assets", () => {
 
     const response = await post(baseUrl, JSON.stringify({ descricao: "   " }));
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Dados inválidos.",
-      fields: {
-        codigoPatrimonial: "Código patrimonial é obrigatório.",
-        descricao: "Descrição é obrigatória.",
-        localizacao: "Localização é obrigatória.",
-        estadoConservacao: "Estado de conservação inválido.",
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: {
+          codigoPatrimonial: "Código patrimonial é obrigatório.",
+          descricao: "Descrição é obrigatória.",
+          localizacao: "Localização é obrigatória.",
+          estadoConservacao: "Estado de conservação inválido.",
+        },
       },
     });
     expect(repository.assets).toHaveLength(0);
@@ -163,24 +195,27 @@ describe("POST /assets", () => {
       }),
     );
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      error: "Dados inválidos.",
-      fields: {
-        estadoConservacao: "Estado de conservação inválido.",
-        garantia: "Garantia deve ser uma data válida.",
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: {
+          estadoConservacao: "Estado de conservação inválido.",
+          garantia: "Garantia deve ser uma data válida.",
+        },
       },
     });
   });
 
-  it("answers malformed JSON with a generic 400", async () => {
+  it("answers malformed JSON with the API validation error", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
     const response = await post(baseUrl, "{ quebrado");
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
-      error: "Requisição inválida.",
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
     });
   });
 
@@ -196,7 +231,10 @@ describe("POST /assets", () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
-      error: "Erro interno do servidor.",
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Ocorreu um erro interno.",
+      },
     });
   });
 });
