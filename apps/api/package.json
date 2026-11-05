@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit -p tsconfig.json",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:provision-manager": "tsx src/commands/provisionManager.ts",
     "test": "vitest run"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
     "pg": "^8.23.1",
@@ -16,6 +19,7 @@
     "typeorm": "^0.3.31"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^4.17.25",
     "@types/node": "^20.19.43",
     "tsx": "^4.23.15",
