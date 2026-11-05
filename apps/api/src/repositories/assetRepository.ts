@@ -1,4 +1,4 @@
-import { QueryFailedError, type DataSource } from "typeorm";
+import { ILike, QueryFailedError, type DataSource } from "typeorm";
 import { Asset, type EstadoConservacao } from "../entities/Asset.js";
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
@@ -12,8 +12,12 @@ export interface NewAsset {
   garantia: string | null;
 }
 
+export type AssetChanges = Partial<NewAsset>;
+
 export interface AssetRepository {
   create(asset: NewAsset): Promise<Asset>;
+  search(term?: string): Promise<Asset[]>;
+  update(id: number, changes: AssetChanges): Promise<Asset | null>;
 }
 
 export class DuplicateCodigoPatrimonialError extends Error {
@@ -35,17 +39,42 @@ function isUniqueViolation(error: unknown): boolean {
 export function createAssetRepository(dataSource: DataSource): AssetRepository {
   const repository = dataSource.getRepository(Asset);
 
-  return {
-    async create(asset) {
-      try {
-        return await repository.save(repository.create(asset));
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new DuplicateCodigoPatrimonialError();
-        }
-
-        throw error;
+  async function save(asset: Asset): Promise<Asset> {
+    try {
+      return await repository.save(asset);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new DuplicateCodigoPatrimonialError();
       }
+
+      throw error;
+    }
+  }
+
+  return {
+    create(asset) {
+      return save(repository.create(asset));
+    },
+
+    search(term) {
+      if (!term) {
+        return repository.find({ order: { codigoPatrimonial: "ASC" } });
+      }
+
+      const pattern = ILike(`%${term.replace(/[\\%_]/g, "\\$&")}%`);
+      return repository.find({
+        where: [{ codigoPatrimonial: pattern }, { descricao: pattern }],
+        order: { codigoPatrimonial: "ASC" },
+      });
+    },
+
+    async update(id, changes) {
+      const asset = await repository.findOneBy({ id });
+      if (!asset) {
+        return null;
+      }
+
+      return save(repository.merge(asset, changes));
     },
   };
 }

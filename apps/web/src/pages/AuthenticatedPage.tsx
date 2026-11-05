@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 
 interface AuthenticatedPageProps {
   onLoggedOut(): void;
+  onManageAssets(): void;
   onManageUsers(): void;
 }
 
@@ -14,6 +15,7 @@ const roleLabels = {
 
 export function AuthenticatedPage({
   onLoggedOut,
+  onManageAssets,
   onManageUsers,
 }: AuthenticatedPageProps) {
   const { user, logout } = useAuth();
@@ -49,6 +51,15 @@ export function AuthenticatedPage({
           </span>
         </a>
         <div className="management-header-actions">
+          {user.role !== "CLIENTE" && (
+            <button
+              className="text-action"
+              onClick={onManageAssets}
+              type="button"
+            >
+              Patrimônio
+            </button>
+          )}
           {user.role === "GESTOR" && (
             <button
               className="text-action"

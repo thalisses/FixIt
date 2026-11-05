@@ -23,6 +23,12 @@ function createFakeRepository(): AssetRepository {
       assets.push(saved);
       return saved;
     },
+    async search() {
+      return assets;
+    },
+    async update() {
+      return null;
+    },
   };
 }
 

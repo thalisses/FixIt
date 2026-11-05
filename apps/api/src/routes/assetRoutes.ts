@@ -21,12 +21,20 @@ export function createAssetRoutes(
     UserRole.GESTOR,
   );
 
+  router.get("/api/assets", requireAuth, controller.list);
   router.post(
     "/api/assets",
     requireAuth,
     requireAllowedOrigin,
     requireAssetManager,
     controller.create,
+  );
+  router.patch(
+    "/api/assets/:id",
+    requireAuth,
+    requireAllowedOrigin,
+    requireAssetManager,
+    controller.update,
   );
 
   return router;
