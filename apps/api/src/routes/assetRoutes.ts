@@ -21,7 +21,7 @@ export function createAssetRoutes(
     UserRole.GESTOR,
   );
 
-  router.get("/api/assets", controller.list);
+  router.get("/api/assets", requireAuth, controller.list);
   router.post(
     "/api/assets",
     requireAuth,
@@ -29,7 +29,13 @@ export function createAssetRoutes(
     requireAssetManager,
     controller.create,
   );
-  router.patch("/api/assets/:id", controller.update);
+  router.patch(
+    "/api/assets/:id",
+    requireAuth,
+    requireAllowedOrigin,
+    requireAssetManager,
+    controller.update,
+  );
 
   return router;
 }

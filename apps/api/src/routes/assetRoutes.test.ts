@@ -340,11 +340,78 @@ describe("POST /api/assets", () => {
   });
 });
 
+describe("GET /api/assets access", () => {
+  it("refuses a request without a session", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+
+    const response = await fetch(`${baseUrl}/api/assets`);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "UNAUTHENTICATED" },
+    });
+  });
+
+  it("gives a Cliente only the fields needed to pick an asset", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+    loggedUser.role = UserRole.CLIENTE;
+
+    const response = await fetch(`${baseUrl}/api/assets`, {
+      headers: authenticatedHeaders,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: [
+        {
+          id: 1,
+          codigoPatrimonial: projetor.codigoPatrimonial,
+          descricao: projetor.descricao,
+        },
+      ],
+    });
+  });
+
+  it("lets a Cliente search by code", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+    loggedUser.role = UserRole.CLIENTE;
+
+    const response = await fetch(`${baseUrl}/api/assets?busca=pat-1`, {
+      headers: authenticatedHeaders,
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: [{ codigoPatrimonial: projetor.codigoPatrimonial }],
+    });
+  });
+
+  it.each([UserRole.GESTOR, UserRole.MANUTENTOR])(
+    "gives %s all the fields",
+    async (role) => {
+      const baseUrl = await startServer(createFakeRepository());
+      await post(baseUrl, JSON.stringify(projetor));
+      loggedUser.role = role;
+
+      const response = await fetch(`${baseUrl}/api/assets`, {
+        headers: authenticatedHeaders,
+      });
+
+      await expect(response.json()).resolves.toEqual({
+        data: [{ id: 1, ...projetor, dataAquisicao: null, garantia: null }],
+      });
+    },
+  );
+});
+
 describe("GET /api/assets", () => {
   it("answers an empty list when nothing is registered", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
-    const response = await fetch(`${baseUrl}/api/assets`);
+    const response = await fetch(`${baseUrl}/api/assets`, {
+      headers: authenticatedHeaders,
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ data: [] });
@@ -354,7 +421,9 @@ describe("GET /api/assets", () => {
     const baseUrl = await startServer(createFakeRepository());
     await post(baseUrl, JSON.stringify(projetor));
 
-    const response = await fetch(`${baseUrl}/api/assets`);
+    const response = await fetch(`${baseUrl}/api/assets`, {
+      headers: authenticatedHeaders,
+    });
 
     await expect(response.json()).resolves.toMatchObject({
       data: [{ codigoPatrimonial: "PAT-1" }],
@@ -373,8 +442,12 @@ describe("GET /api/assets", () => {
       }),
     );
 
-    const byDescription = await fetch(`${baseUrl}/api/assets?busca=%20dell%20`);
-    const byCode = await fetch(`${baseUrl}/api/assets?busca=pat-1`);
+    const byDescription = await fetch(`${baseUrl}/api/assets?busca=%20dell%20`, {
+      headers: authenticatedHeaders,
+    });
+    const byCode = await fetch(`${baseUrl}/api/assets?busca=pat-1`, {
+      headers: authenticatedHeaders,
+    });
 
     await expect(byDescription.json()).resolves.toMatchObject({
       data: [{ codigoPatrimonial: "PAT-2" }],
@@ -387,7 +460,9 @@ describe("GET /api/assets", () => {
   it("refuses a repeated search parameter", async () => {
     const baseUrl = await startServer(createFakeRepository());
 
-    const response = await fetch(`${baseUrl}/api/assets?busca=a&busca=b`);
+    const response = await fetch(`${baseUrl}/api/assets?busca=a&busca=b`, {
+      headers: authenticatedHeaders,
+    });
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
@@ -405,13 +480,80 @@ describe("PATCH /api/assets/:id", () => {
     baseUrl: string,
     id: string,
     body: Record<string, unknown>,
+    headers: Record<string, string> = authenticatedHeaders,
   ): Promise<Response> {
     return fetch(`${baseUrl}/api/assets/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
   }
+
+  it.each([UserRole.GESTOR, UserRole.MANUTENTOR])(
+    "lets %s edit an asset",
+    async (role) => {
+      const baseUrl = await startServer(createFakeRepository());
+      await post(baseUrl, JSON.stringify(projetor));
+      loggedUser.role = role;
+
+      const response = await patch(baseUrl, "1", { localizacao: "Sala 9" });
+
+      expect(response.status).toBe(200);
+    },
+  );
+
+  it("refuses a Cliente and keeps the asset unchanged", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+    await post(baseUrl, JSON.stringify(projetor));
+    loggedUser.role = UserRole.CLIENTE;
+
+    const response = await patch(baseUrl, "1", { localizacao: "Sala 9" });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "FORBIDDEN" },
+    });
+    expect(repository.assets[0]?.localizacao).toBe(projetor.localizacao);
+  });
+
+  it("refuses an edit without a session and keeps the asset unchanged", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(
+      baseUrl,
+      "1",
+      { localizacao: "Sala 9" },
+      { Origin: webOrigin },
+    );
+
+    expect(response.status).toBe(401);
+    expect(repository.assets[0]?.localizacao).toBe(projetor.localizacao);
+  });
+
+  it("refuses an edit from another origin and keeps the asset unchanged", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(
+      baseUrl,
+      "1",
+      { localizacao: "Sala 9" },
+      {
+        Cookie: authenticatedHeaders.Cookie,
+        Origin: "https://site-malicioso.example",
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "ORIGIN_NOT_ALLOWED" },
+    });
+    expect(repository.assets[0]?.localizacao).toBe(projetor.localizacao);
+  });
 
   it("changes the location and the condition (CA2)", async () => {
     const baseUrl = await startServer(createFakeRepository());

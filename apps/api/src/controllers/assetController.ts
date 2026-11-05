@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { getAssetSelectionVisibility } from "../auth/authorization.js";
+import type { Asset } from "../entities/Asset.js";
 import { DuplicateCodigoPatrimonialError } from "../repositories/assetRepository.js";
 import type { AssetService } from "../services/assetService.js";
 import {
@@ -26,6 +28,10 @@ function sendValidationError(response: Response, error: z.ZodError): void {
   });
 }
 
+function toMinimalAsset({ id, codigoPatrimonial, descricao }: Asset) {
+  return { id, codigoPatrimonial, descricao };
+}
+
 export function createAssetController(service: AssetService) {
   return {
     async list(
@@ -41,7 +47,10 @@ export function createAssetController(service: AssetService) {
 
       try {
         const assets = await service.search(parsed.data.busca);
-        response.status(200).json({ data: assets });
+        const visibility = getAssetSelectionVisibility(request.authUser ?? null);
+        response.status(200).json({
+          data: visibility === "full" ? assets : assets.map(toMinimalAsset),
+        });
       } catch (error) {
         next(error);
       }
