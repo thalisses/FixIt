@@ -1,10 +1,10 @@
 import { once } from "node:events";
 import type { Server } from "node:http";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import type { Asset } from "../entities/Asset.js";
 import { AuthSession } from "../entities/AuthSession.js";
-import { User } from "../entities/User.js";
+import { User, UserRole } from "../entities/User.js";
 import {
   DuplicateCodigoPatrimonialError,
   type AssetRepository,
@@ -15,6 +15,16 @@ import type { UserRepository } from "../services/userService.js";
 
 let server: Server | undefined;
 
+const webOrigin = "http://localhost:5173";
+const sessionToken = "a".repeat(43);
+const loggedUser = Object.assign(new User(), {
+  id: "user-1",
+  fullName: "Ana Silva",
+  email: "ana@example.edu",
+  isActive: true,
+  role: UserRole.GESTOR,
+});
+
 const userRepository: UserRepository = {
   create: (input) => Object.assign(new User(), input),
   findOneBy: async () => null,
@@ -23,8 +33,13 @@ const userRepository: UserRepository = {
 const sessionRepository: SessionRepository = {
   create: (input) => Object.assign(new AuthSession(), input),
   save: async (session) => session,
-  findOneByTokenHash: async () => null,
-  findUserById: async () => null,
+  findOneByTokenHash: async () =>
+    Object.assign(new AuthSession(), {
+      userId: loggedUser.id,
+      expiresAt: null,
+      revokedAt: null,
+    }),
+  findUserById: async (userId) => (userId === loggedUser.id ? loggedUser : null),
 };
 const userManagementRepository: UserManagementRepository = {
   list: async () => ({ users: [], totalItems: 0 }),
@@ -32,6 +47,10 @@ const userManagementRepository: UserManagementRepository = {
     throw new Error("User management is not used in this test.");
   },
 };
+
+beforeEach(() => {
+  loggedUser.role = UserRole.GESTOR;
+});
 
 afterEach(async () => {
   const currentServer = server;
@@ -79,7 +98,7 @@ async function startServer(repository: AssetRepository): Promise<string> {
     userRepository,
     sessionRepository,
     userManagementRepository,
-    { secureCookies: false, webOrigin: "http://localhost:5173" },
+    { secureCookies: false, webOrigin },
     repository,
   ).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -92,10 +111,19 @@ async function startServer(repository: AssetRepository): Promise<string> {
   return `http://127.0.0.1:${address.port}`;
 }
 
-function post(baseUrl: string, body: string): Promise<Response> {
+const authenticatedHeaders = {
+  Cookie: `fixit_session=${sessionToken}`,
+  Origin: webOrigin,
+};
+
+function post(
+  baseUrl: string,
+  body: string,
+  headers: Record<string, string> = authenticatedHeaders,
+): Promise<Response> {
   return fetch(`${baseUrl}/api/assets`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body,
   });
 }
@@ -106,6 +134,65 @@ const projetor = {
   localizacao: "Bloco C, sala 12",
   estadoConservacao: "BOM",
 };
+
+describe("POST /api/assets access", () => {
+  it.each([UserRole.GESTOR, UserRole.MANUTENTOR])(
+    "lets %s register an asset (CA1)",
+    async (role) => {
+      loggedUser.role = role;
+      const baseUrl = await startServer(createFakeRepository());
+
+      const response = await post(baseUrl, JSON.stringify(projetor));
+
+      expect(response.status).toBe(201);
+    },
+  );
+
+  it("refuses a Cliente and saves nothing", async () => {
+    loggedUser.role = UserRole.CLIENTE;
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await post(baseUrl, JSON.stringify(projetor));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "FORBIDDEN" },
+    });
+    expect(repository.assets).toHaveLength(0);
+  });
+
+  it("refuses a request without a session and saves nothing", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await post(baseUrl, JSON.stringify(projetor), {
+      Origin: webOrigin,
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "UNAUTHENTICATED" },
+    });
+    expect(repository.assets).toHaveLength(0);
+  });
+
+  it("refuses a request from another origin and saves nothing", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await post(baseUrl, JSON.stringify(projetor), {
+      Cookie: authenticatedHeaders.Cookie,
+      Origin: "https://site-malicioso.example",
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "ORIGIN_NOT_ALLOWED" },
+    });
+    expect(repository.assets).toHaveLength(0);
+  });
+});
 
 describe("POST /api/assets", () => {
   it("registers an asset without the optional dates (CA1)", async () => {

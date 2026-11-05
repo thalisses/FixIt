@@ -55,7 +55,13 @@ export function createApp(
     ),
   );
   if (assetRepository) {
-    app.use(createAssetRoutes(createAssetService(assetRepository)));
+    app.use(
+      createAssetRoutes(
+        createAssetService(assetRepository),
+        sessionService,
+        options.webOrigin,
+      ),
+    );
   }
   app.use(apiErrorHandler);
 
