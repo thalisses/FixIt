@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createDataSource } from "./database.js";
+import { Asset } from "../entities/Asset.js";
 import { AuthSession } from "../entities/AuthSession.js";
 import { User } from "../entities/User.js";
+import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAssets.js";
 import { CreateAuthenticationTables1793847279000 } from "../migrations/1793847279000-CreateAuthenticationTables.js";
 
 describe("createDataSource", () => {
@@ -15,5 +17,12 @@ describe("createDataSource", () => {
     expect(dataSource.options.migrations).toContain(
       CreateAuthenticationTables1793847279000,
     );
+  });
+
+  it("registers the asset entity and its migration", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+
+    expect(dataSource.options.entities).toContain(Asset);
+    expect(dataSource.options.migrations).toContain(CreateAssets1793835564779);
   });
 });

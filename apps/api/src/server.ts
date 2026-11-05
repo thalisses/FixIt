@@ -4,6 +4,7 @@ import { createDataSource } from "./config/database.js";
 import { loadEnvironment } from "./config/env.js";
 import { AuthSession } from "./entities/AuthSession.js";
 import { User } from "./entities/User.js";
+import { createAssetRepository } from "./repositories/assetRepository.js";
 import { createUserManagementRepository } from "./repositories/userManagementRepository.js";
 import type { SessionRepository } from "./services/sessionService.js";
 
@@ -36,6 +37,7 @@ async function startServer(): Promise<void> {
       secureCookies: environment.isProduction,
       webOrigin: environment.webOrigin,
     },
+    createAssetRepository(dataSource),
   ).listen(
     environment.port,
     "0.0.0.0",

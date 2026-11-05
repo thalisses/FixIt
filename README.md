@@ -89,6 +89,28 @@ A API também aplica migrations antes de aceitar requisições. Em produção,
 configure `WEB_ORIGIN` com a origem HTTPS real e termine TLS na infraestrutura
 de implantação.
 
+## Migrations
+
+A API aplica as migrations pendentes ao subir. Depois de atualizar a `main`, basta rodar `docker compose up --build`.
+
+Para criar uma migration, altere a entidade em `apps/api/src/entities`, deixe o PostgreSQL do Compose ativo e, com o `.env` criado, gere o arquivo:
+
+```sh
+npm run migration:generate --workspace @fixit/api -- src/migrations/NomeDaMudanca
+```
+
+Confira o arquivo gerado e registre a entidade, se for nova, e a migration em `apps/api/src/config/database.ts`.
+
+**Atenção:** hoje as entidades `User` e `AuthSession` não declaram algumas restrições criadas na migration de autenticação, então o comando gerado também propõe removê-las. Apague do arquivo tudo o que não for da sua mudança antes de fazer o commit.
+
+Para desfazer a última migration aplicada:
+
+```sh
+npm run migration:revert --workspace @fixit/api
+```
+
+Migration que já entrou na `main` não deve ser editada: crie outra para corrigir.
+
 ## Escopo atual
 
 Esta fundação contém cadastro, login, sessões, autorização por perfil,

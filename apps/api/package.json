@@ -8,7 +8,9 @@
     "build": "tsc --noEmit -p tsconfig.json",
     "db:migrate": "tsx src/migrate.ts",
     "db:provision-manager": "tsx src/commands/provisionManager.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "migration:generate": "tsx ../../node_modules/typeorm/cli.js migration:generate -d src/config/migrationDataSource.ts",
+    "migration:revert": "tsx ../../node_modules/typeorm/cli.js migration:revert -d src/config/migrationDataSource.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -16,7 +18,8 @@
     "express": "^4.22.3",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
-    "typeorm": "^0.3.31"
+    "typeorm": "^0.3.31",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

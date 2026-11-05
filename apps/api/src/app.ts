@@ -1,10 +1,13 @@
 import express, { type ErrorRequestHandler, type Express } from "express";
+import type { AssetRepository } from "./repositories/assetRepository.js";
+import { createAssetRoutes } from "./routes/assetRoutes.js";
 import {
   createHealthRoutes,
   type DatabaseHealthCheck,
 } from "./routes/healthRoutes.js";
 import { createUserRoutes } from "./routes/userRoutes.js";
 import { createUserManagementRoutes } from "./routes/userManagementRoutes.js";
+import { createAssetService } from "./services/assetService.js";
 import {
   createUserService,
   type UserRepository,
@@ -27,6 +30,7 @@ export function createApp(
   sessionRepository: SessionRepository,
   userManagementRepository: UserManagementRepository,
   options: { secureCookies: boolean; webOrigin: string },
+  assetRepository?: AssetRepository,
 ): Express {
   const app = express();
 
@@ -50,6 +54,15 @@ export function createApp(
       options,
     ),
   );
+  if (assetRepository) {
+    app.use(
+      createAssetRoutes(
+        createAssetService(assetRepository),
+        sessionService,
+        options.webOrigin,
+      ),
+    );
+  }
   app.use(apiErrorHandler);
 
   return app;
