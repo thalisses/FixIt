@@ -57,6 +57,24 @@ Para encerrar os containers sem apagar os dados:
 docker compose down
 ```
 
+## Migrations
+
+A API aplica as migrations pendentes ao subir. Depois de atualizar a `main`, basta rodar `docker compose up --build`.
+
+Para criar uma migration, altere a entidade em `apps/api/src/entities`, deixe o PostgreSQL do Compose ativo e, com o `.env` criado, gere o arquivo:
+
+```sh
+npm run migration:generate --workspace @fixit/api -- src/migrations/NomeDaMudanca
+```
+
+Confira o arquivo gerado e registre a entidade, se for nova, e a migration em `apps/api/src/config/database.ts`. Para desfazer a última migration aplicada:
+
+```sh
+npm run migration:revert --workspace @fixit/api
+```
+
+Migration que já entrou na `main` não deve ser editada: crie outra para corrigir.
+
 ## Escopo atual
 
 Esta fundação contém uma tela inicial, os endpoints de saúde e a conexão ao PostgreSQL. Autenticação e funcionalidades do backlog ainda não fazem parte do escopo.
