@@ -99,7 +99,11 @@ Para criar uma migration, altere a entidade em `apps/api/src/entities`, deixe o 
 npm run migration:generate --workspace @fixit/api -- src/migrations/NomeDaMudanca
 ```
 
-Confira o arquivo gerado e registre a entidade, se for nova, e a migration em `apps/api/src/config/database.ts`. Para desfazer a última migration aplicada:
+Confira o arquivo gerado e registre a entidade, se for nova, e a migration em `apps/api/src/config/database.ts`.
+
+**Atenção:** hoje as entidades `User` e `AuthSession` não declaram algumas restrições criadas na migration de autenticação, então o comando gerado também propõe removê-las. Apague do arquivo tudo o que não for da sua mudança antes de fazer o commit.
+
+Para desfazer a última migration aplicada:
 
 ```sh
 npm run migration:revert --workspace @fixit/api
