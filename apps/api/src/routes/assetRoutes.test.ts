@@ -98,6 +98,15 @@ function createFakeRepository(): AssetRepository & { assets: Asset[] } {
       );
     },
     async update(id, changes) {
+      const duplicate = assets.some(
+        (candidate) =>
+          candidate.id !== id &&
+          candidate.codigoPatrimonial === changes.codigoPatrimonial,
+      );
+      if (duplicate) {
+        throw new DuplicateCodigoPatrimonialError();
+      }
+
       const asset = assets.find((candidate) => candidate.id === id);
       return asset ? Object.assign(asset, changes) : null;
     },
@@ -593,17 +602,133 @@ describe("PATCH /api/assets/:id", () => {
     });
   });
 
-  it("ignores fields that this edit does not cover", async () => {
+  it("ignores the id and unknown fields", async () => {
     const baseUrl = await startServer(createFakeRepository());
     await post(baseUrl, JSON.stringify(projetor));
 
     const response = await patch(baseUrl, "1", {
-      codigoPatrimonial: "OUTRO",
+      id: 99,
+      naoExiste: "x",
       localizacao: "Sala 9",
     });
 
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        asset: {
+          id: 1,
+          ...projetor,
+          localizacao: "Sala 9",
+          dataAquisicao: null,
+          garantia: null,
+        },
+      },
+    });
+  });
+
+  it("corrects the code, the description and the dates", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", {
+      codigoPatrimonial: "  PAT-1A ",
+      descricao: "Projetor Epson X05",
+      dataAquisicao: "2025-03-01",
+      garantia: "2027-03-01",
+    });
+
+    expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      data: { asset: { codigoPatrimonial: "PAT-1", localizacao: "Sala 9" } },
+      data: {
+        asset: {
+          codigoPatrimonial: "PAT-1A",
+          descricao: "Projetor Epson X05",
+          localizacao: projetor.localizacao,
+          dataAquisicao: "2025-03-01",
+          garantia: "2027-03-01",
+        },
+      },
+    });
+  });
+
+  it("clears an optional date sent as null and keeps the other one", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(
+      baseUrl,
+      JSON.stringify({
+        ...projetor,
+        dataAquisicao: "2025-03-01",
+        garantia: "2027-03-01",
+      }),
+    );
+
+    const response = await patch(baseUrl, "1", { garantia: null });
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: { asset: { dataAquisicao: "2025-03-01", garantia: null } },
+    });
+  });
+
+  it("refuses the code of another asset and keeps the asset unchanged", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+    await post(baseUrl, JSON.stringify(projetor));
+    await post(
+      baseUrl,
+      JSON.stringify({ ...projetor, codigoPatrimonial: "PAT-2" }),
+    );
+
+    const response = await patch(baseUrl, "2", {
+      codigoPatrimonial: "PAT-1",
+      descricao: "Outra",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "ASSET_CODE_ALREADY_EXISTS",
+        message: "Código patrimonial já cadastrado.",
+      },
+    });
+    expect(repository.assets[1]?.codigoPatrimonial).toBe("PAT-2");
+    expect(repository.assets[1]?.descricao).toBe(projetor.descricao);
+  });
+
+  it("accepts the code the asset already has", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", {
+      codigoPatrimonial: "PAT-1",
+      descricao: "Outra",
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
+    ["codigoPatrimonial", "Código patrimonial é obrigatório."],
+    ["descricao", "Descrição é obrigatória."],
+  ])("refuses a blank %s", async (field, message) => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", { [field]: "   " });
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { fields: { [field]: message } },
+    });
+  });
+
+  it("refuses an impossible date", async () => {
+    const baseUrl = await startServer(createFakeRepository());
+    await post(baseUrl, JSON.stringify(projetor));
+
+    const response = await patch(baseUrl, "1", { garantia: "2026-02-30" });
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { fields: { garantia: "Garantia deve ser uma data válida." } },
     });
   });
 
@@ -640,13 +765,13 @@ describe("PATCH /api/assets/:id", () => {
     const baseUrl = await startServer(createFakeRepository());
     await post(baseUrl, JSON.stringify(projetor));
 
-    const response = await patch(baseUrl, "1", { descricao: "Outra" });
+    const response = await patch(baseUrl, "1", { naoExiste: "x" });
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
       error: {
         code: "VALIDATION_ERROR",
-        message: "Informe a localização ou o estado de conservação.",
+        message: "Informe ao menos um campo para alterar.",
         fields: {},
       },
     });

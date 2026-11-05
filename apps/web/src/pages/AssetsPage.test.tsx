@@ -8,6 +8,8 @@ import { AssetsPage } from "./AssetsPage";
 let container: HTMLDivElement;
 let root: Root;
 
+const editForm = 'form[aria-label="Editar bem"]';
+
 const projetor: Asset = {
   id: 1,
   codigoPatrimonial: "PAT-1",
@@ -348,20 +350,22 @@ describe("AssetsPage detail", () => {
     await clickButton("Ver ficha de PAT-1");
     await clickButton("Editar bem");
 
-    setValue('form[aria-label="Editar bem"] input', "Bloco A, sala 3");
-    setValue('form[aria-label="Editar bem"] select', "RUIM");
-    await submit('form[aria-label="Editar bem"]');
+    setValue(`${editForm} input[name="localizacao"]`, "Bloco A, sala 3");
+    setValue(`${editForm} select[name="estadoConservacao"]`, "RUIM");
+    await submit(editForm);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/assets/1",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify({
-          localizacao: "Bloco A, sala 3",
-          estadoConservacao: "RUIM",
-        }),
-      }),
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "PATCH",
     );
+    expect(patchCall?.[0]).toBe("/api/assets/1");
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      codigoPatrimonial: "PAT-1",
+      descricao: "Projetor Epson",
+      localizacao: "Bloco A, sala 3",
+      estadoConservacao: "RUIM",
+      dataAquisicao: "2025-03-01",
+      garantia: null,
+    });
     expect(container.querySelector('form[aria-label="Editar bem"]')).toBeNull();
     expect(container.querySelector(".asset-location")?.textContent).toBe(
       "Bloco A, sala 3",
@@ -388,15 +392,109 @@ describe("AssetsPage detail", () => {
     await clickButton("Ver ficha de PAT-1");
     await clickButton("Editar bem");
 
-    setValue('form[aria-label="Editar bem"] input', "  ");
-    await submit('form[aria-label="Editar bem"]');
+    setValue(`${editForm} input[name="localizacao"]`, "  ");
+    await submit(editForm);
 
-    expect(container.querySelector("#edit-location-error")?.textContent).toBe(
+    expect(container.querySelector("#localizacao-error")?.textContent).toBe(
       "Localização é obrigatória.",
     );
     expect(container.querySelector(".asset-location")?.textContent).toBe(
       "Bloco C, sala 12",
     );
+  });
+
+  it("opens the edit form with all the current data", async () => {
+    stubBackend({});
+    await mountPage();
+    await clickButton("Ver ficha de PAT-1");
+    await clickButton("Editar bem");
+
+    const value = (name: string) =>
+      container.querySelector<HTMLInputElement | HTMLSelectElement>(
+        `${editForm} [name="${name}"]`,
+      )?.value;
+
+    expect(value("codigoPatrimonial")).toBe("PAT-1");
+    expect(value("descricao")).toBe("Projetor Epson");
+    expect(value("localizacao")).toBe("Bloco C, sala 12");
+    expect(value("estadoConservacao")).toBe("BOM");
+    expect(value("dataAquisicao")).toBe("2025-03-01");
+    expect(value("garantia")).toBe("");
+  });
+
+  it("corrects the code and the description and shows them", async () => {
+    const updated: Asset = {
+      ...projetor,
+      codigoPatrimonial: "PAT-1A",
+      descricao: "Projetor Epson X05",
+      dataAquisicao: null,
+    };
+    const fetchMock = stubBackend({
+      patch: () => jsonResponse({ data: { asset: updated } }),
+    });
+    await mountPage();
+    await clickButton("Ver ficha de PAT-1");
+    await clickButton("Editar bem");
+
+    setValue(`${editForm} input[name="codigoPatrimonial"]`, "PAT-1A");
+    setValue(`${editForm} input[name="descricao"]`, "Projetor Epson X05");
+    setValue(`${editForm} input[name="dataAquisicao"]`, "");
+    await submit(editForm);
+
+    const patchCall = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "PATCH",
+    );
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+      codigoPatrimonial: "PAT-1A",
+      descricao: "Projetor Epson X05",
+      dataAquisicao: null,
+    });
+    expect(container.querySelector("h1")?.textContent).toBe(
+      "Projetor Epson X05",
+    );
+    expect(container.textContent).toContain("Ficha de PAT-1A");
+  });
+
+  it("points to the code field when another asset already uses it", async () => {
+    stubBackend({
+      patch: () =>
+        jsonResponse(
+          {
+            error: {
+              code: "ASSET_CODE_ALREADY_EXISTS",
+              message: "Código patrimonial já cadastrado.",
+            },
+          },
+          409,
+        ),
+    });
+    await mountPage();
+    await clickButton("Ver ficha de PAT-1");
+    await clickButton("Editar bem");
+
+    setValue(`${editForm} input[name="codigoPatrimonial"]`, "PAT-2");
+    await submit(editForm);
+
+    expect(
+      container.querySelector("#codigoPatrimonial-error")?.textContent,
+    ).toBe("Código patrimonial já cadastrado.");
+    expect(container.querySelector("h1")?.textContent).toBe("Projetor Epson");
+  });
+
+  it("discards the changes when the edit is cancelled", async () => {
+    const fetchMock = stubBackend({});
+    await mountPage();
+    await clickButton("Ver ficha de PAT-1");
+    await clickButton("Editar bem");
+    setValue(`${editForm} input[name="descricao"]`, "Outra");
+
+    await clickButton("Cancelar");
+
+    expect(container.querySelector(editForm)).toBeNull();
+    expect(container.querySelector("h1")?.textContent).toBe("Projetor Epson");
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
+    ).toBe(false);
   });
 });
 

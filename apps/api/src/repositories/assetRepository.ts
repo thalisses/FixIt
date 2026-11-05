@@ -12,9 +12,7 @@ export interface NewAsset {
   garantia: string | null;
 }
 
-export type AssetChanges = Partial<
-  Pick<NewAsset, "localizacao" | "estadoConservacao">
->;
+export type AssetChanges = Partial<NewAsset>;
 
 export interface AssetRepository {
   create(asset: NewAsset): Promise<Asset>;
@@ -41,17 +39,21 @@ function isUniqueViolation(error: unknown): boolean {
 export function createAssetRepository(dataSource: DataSource): AssetRepository {
   const repository = dataSource.getRepository(Asset);
 
-  return {
-    async create(asset) {
-      try {
-        return await repository.save(repository.create(asset));
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new DuplicateCodigoPatrimonialError();
-        }
-
-        throw error;
+  async function save(asset: Asset): Promise<Asset> {
+    try {
+      return await repository.save(asset);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new DuplicateCodigoPatrimonialError();
       }
+
+      throw error;
+    }
+  }
+
+  return {
+    create(asset) {
+      return save(repository.create(asset));
     },
 
     search(term) {
@@ -72,7 +74,7 @@ export function createAssetRepository(dataSource: DataSource): AssetRepository {
         return null;
       }
 
-      return repository.save(repository.merge(asset, changes));
+      return save(repository.merge(asset, changes));
     },
   };
 }

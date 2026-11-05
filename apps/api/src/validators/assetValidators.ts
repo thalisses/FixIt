@@ -5,12 +5,15 @@ function requiredText(message: string) {
   return z.string({ error: message }).trim().min(1, message);
 }
 
-function optionalDate(label: string) {
+function nullableDate(label: string) {
   return z.iso
     .date({ error: `${label} deve ser uma data válida.` })
     .nullable()
-    .optional()
-    .transform((value) => value ?? null);
+    .optional();
+}
+
+function optionalDate(label: string) {
+  return nullableDate(label).transform((value) => value ?? null);
 }
 
 export const assetSearchSchema = z.object({
@@ -20,6 +23,8 @@ export const assetSearchSchema = z.object({
     .optional(),
 });
 
+const codigoPatrimonial = requiredText("Código patrimonial é obrigatório.");
+const descricao = requiredText("Descrição é obrigatória.");
 const localizacao = requiredText("Localização é obrigatória.");
 const estadoConservacao = z.enum(EstadoConservacao, {
   error: "Estado de conservação inválido.",
@@ -27,8 +32,8 @@ const estadoConservacao = z.enum(EstadoConservacao, {
 
 export const newAssetSchema = z.object(
   {
-    codigoPatrimonial: requiredText("Código patrimonial é obrigatório."),
-    descricao: requiredText("Descrição é obrigatória."),
+    codigoPatrimonial,
+    descricao,
     localizacao,
     estadoConservacao,
     dataAquisicao: optionalDate("Data de aquisição"),
@@ -51,11 +56,15 @@ export const assetIdSchema = z.object({
 export const assetChangesSchema = z
   .object(
     {
+      codigoPatrimonial: codigoPatrimonial.optional(),
+      descricao: descricao.optional(),
       localizacao: localizacao.optional(),
       estadoConservacao: estadoConservacao.optional(),
+      dataAquisicao: nullableDate("Data de aquisição"),
+      garantia: nullableDate("Garantia"),
     },
     { error: "Dados do bem patrimonial inválidos." },
   )
   .refine((changes) => Object.keys(changes).length > 0, {
-    error: "Informe a localização ou o estado de conservação.",
+    error: "Informe ao menos um campo para alterar.",
   });

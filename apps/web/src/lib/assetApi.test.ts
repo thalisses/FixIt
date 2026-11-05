@@ -61,12 +61,9 @@ describe("assetApi", () => {
     });
   });
 
-  it("updates only the location and the condition", async () => {
+  it("sends every field of an edited asset", async () => {
     const fetchMock = stubFetch({ data: { asset } });
-    const changes = {
-      localizacao: "Sala 9",
-      estadoConservacao: "RUIM" as const,
-    };
+    const { id: _id, ...changes } = asset;
 
     await updateAsset(1, changes);
 

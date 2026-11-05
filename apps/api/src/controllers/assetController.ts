@@ -28,6 +28,15 @@ function sendValidationError(response: Response, error: z.ZodError): void {
   });
 }
 
+function sendDuplicateCodeError(
+  response: Response,
+  error: DuplicateCodigoPatrimonialError,
+): void {
+  response.status(409).json({
+    error: { code: "ASSET_CODE_ALREADY_EXISTS", message: error.message },
+  });
+}
+
 function toMinimalAsset({ id, codigoPatrimonial, descricao }: Asset) {
   return { id, codigoPatrimonial, descricao };
 }
@@ -72,12 +81,7 @@ export function createAssetController(service: AssetService) {
         response.status(201).json({ data: { asset } });
       } catch (error) {
         if (error instanceof DuplicateCodigoPatrimonialError) {
-          response.status(409).json({
-            error: {
-              code: "ASSET_CODE_ALREADY_EXISTS",
-              message: error.message,
-            },
-          });
+          sendDuplicateCodeError(response, error);
           return;
         }
 
@@ -116,6 +120,11 @@ export function createAssetController(service: AssetService) {
 
         response.status(200).json({ data: { asset } });
       } catch (error) {
+        if (error instanceof DuplicateCodigoPatrimonialError) {
+          sendDuplicateCodeError(response, error);
+          return;
+        }
+
         next(error);
       }
     },

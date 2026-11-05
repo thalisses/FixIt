@@ -24,11 +24,6 @@ export interface NewAssetInput {
   garantia: string | null;
 }
 
-export interface AssetChanges {
-  localizacao: string;
-  estadoConservacao: EstadoConservacao;
-}
-
 export type AssetFieldErrors = Record<string, string>;
 
 export class AssetApiError extends Error {
@@ -70,12 +65,12 @@ export async function createAsset(input: NewAssetInput): Promise<Asset> {
 
 export async function updateAsset(
   id: number,
-  changes: AssetChanges,
+  input: NewAssetInput,
 ): Promise<Asset> {
   return readAsset(
     await request(
       `/api/assets/${encodeURIComponent(id)}`,
-      jsonRequest("PATCH", changes),
+      jsonRequest("PATCH", input),
       "Não foi possível salvar as alterações.",
     ),
   );
