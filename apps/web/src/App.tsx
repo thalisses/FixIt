@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./styles/index.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AssetsPage } from "./pages/AssetsPage";
 import { AuthenticatedPage } from "./pages/AuthenticatedPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegistrationPage } from "./pages/RegistrationPage";
@@ -60,15 +61,25 @@ function AppContent() {
       );
     }
 
+    if (user.role !== "CLIENTE" && currentPath === "/assets") {
+      return (
+        <AssetsPage
+          onLoggedOut={() => navigate("/login")}
+          onNavigate={navigate}
+        />
+      );
+    }
+
     return (
       <AuthenticatedPage
         onLoggedOut={() => navigate("/login")}
+        onManageAssets={() => navigate("/assets")}
         onManageUsers={() => navigate("/users")}
       />
     );
   }
 
-  return currentPath === "/login" || currentPath === "/users" ? (
+  return ["/login", "/users", "/assets"].includes(currentPath) ? (
     <LoginPage />
   ) : (
     <RegistrationPage />
