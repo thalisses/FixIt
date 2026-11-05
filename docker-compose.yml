@@ -26,6 +26,7 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       PORT: 3000
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
       DATABASE_URL: postgresql://${POSTGRES_USER:-fixit}:${POSTGRES_PASSWORD:-fixit_local_only}@db:5432/${POSTGRES_DB:-fixit}
     ports:
       - "${API_PORT:-3000}:3000"
@@ -49,6 +50,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    environment:
+      API_PROXY_TARGET: http://api:3000
     ports:
       - "${WEB_PORT:-5173}:5173"
     depends_on:

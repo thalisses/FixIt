@@ -2,9 +2,32 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
+import { AuthSession } from "../entities/AuthSession.js";
+import { User } from "../entities/User.js";
 import type { DatabaseHealthCheck } from "./healthRoutes.js";
+import type { SessionRepository } from "../services/sessionService.js";
+import type { UserRepository } from "../services/userService.js";
+import type { UserManagementRepository } from "../services/userManagementService.js";
 
 let server: Server | undefined;
+
+const userRepository: UserRepository = {
+  create: (input) => Object.assign(new User(), input),
+  findOneBy: async () => null,
+  save: async (user) => Object.assign(user, { id: "user-1" }),
+};
+const sessionRepository: SessionRepository = {
+  create: (input) => Object.assign(new AuthSession(), input),
+  save: async (session) => session,
+  findOneByTokenHash: async () => null,
+  findUserById: async () => null,
+};
+const userManagementRepository: UserManagementRepository = {
+  list: async () => ({ users: [], totalItems: 0 }),
+  transaction: async <T>() => {
+    throw new Error("User management is not used in this test.");
+  },
+};
 
 afterEach(async () => {
   const currentServer = server;
@@ -26,7 +49,13 @@ afterEach(async () => {
 });
 
 async function startServer(checkDatabase: DatabaseHealthCheck): Promise<string> {
-  server = createApp(checkDatabase).listen(0, "127.0.0.1");
+  server = createApp(
+    checkDatabase,
+    userRepository,
+    sessionRepository,
+    userManagementRepository,
+    { secureCookies: false, webOrigin: "http://localhost:5173" },
+  ).listen(0, "127.0.0.1");
   await once(server, "listening");
 
   const address = server.address();
