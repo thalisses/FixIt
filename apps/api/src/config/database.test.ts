@@ -9,6 +9,7 @@ import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAss
 import { CreateAuthenticationTables1793847279000 } from "../migrations/1793847279000-CreateAuthenticationTables.js";
 import { CreateSolicitations1793897712249 } from "../migrations/1793897712249-CreateSolicitations.js";
 import { CreateStatusHistory1793969169334 } from "../migrations/1793969169334-CreateStatusHistory.js";
+import { AddAssetToSolicitations1793972702308 } from "../migrations/1793972702308-AddAssetToSolicitations.js";
 
 describe("createDataSource", () => {
   it("registers authentication entities and migration without schema synchronization", () => {
@@ -35,6 +36,12 @@ describe("createDataSource", () => {
 
     expect(dataSource.options.entities).toContain(StatusHistory);
     expect(dataSource.options.migrations).toContain(CreateStatusHistory1793969169334);
+  });
+
+  it("registers the migration that links a solicitation to an asset", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+
+    expect(dataSource.options.migrations).toContain(AddAssetToSolicitations1793972702308);
   });
 
   it("registers the asset entity and its migration", () => {

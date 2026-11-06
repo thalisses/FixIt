@@ -2,11 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   type Relation,
 } from "typeorm";
+import { Asset } from "./Asset.js";
 import { User } from "./User.js";
 
 export enum AreaTecnica {
@@ -99,4 +101,13 @@ export class Solicitation {
   @ManyToOne(() => User)
   @JoinColumn({ name: "responsavel_id" })
   responsavel!: Relation<User> | null;
+
+  // Opcional: problemas como uma infiltração não se referem a um bem (US008).
+  @Index("solicitations_bem_id_idx")
+  @Column({ name: "bem_id", type: "integer", nullable: true })
+  bemId!: number | null;
+
+  @ManyToOne(() => Asset)
+  @JoinColumn({ name: "bem_id" })
+  bem!: Relation<Asset> | null;
 }

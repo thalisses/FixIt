@@ -9,6 +9,7 @@ import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAss
 import { CreateAuthenticationTables1793847279000 } from "../migrations/1793847279000-CreateAuthenticationTables.js";
 import { CreateSolicitations1793897712249 } from "../migrations/1793897712249-CreateSolicitations.js";
 import { CreateStatusHistory1793969169334 } from "../migrations/1793969169334-CreateStatusHistory.js";
+import { AddAssetToSolicitations1793972702308 } from "../migrations/1793972702308-AddAssetToSolicitations.js";
 
 export function createDataSource(databaseUrl: string): DataSource {
   return new DataSource({
@@ -21,6 +22,7 @@ export function createDataSource(databaseUrl: string): DataSource {
       CreateAuthenticationTables1793847279000,
       CreateSolicitations1793897712249,
       CreateStatusHistory1793969169334,
+      AddAssetToSolicitations1793972702308,
     ],
     logging: false,
   });
