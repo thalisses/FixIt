@@ -5,6 +5,7 @@ import { loadEnvironment } from "./config/env.js";
 import { AuthSession } from "./entities/AuthSession.js";
 import { User } from "./entities/User.js";
 import { createAssetRepository } from "./repositories/assetRepository.js";
+import { createStatusHistoryRepository } from "./repositories/statusHistoryRepository.js";
 import { createUserManagementRepository } from "./repositories/userManagementRepository.js";
 import type { SessionRepository } from "./services/sessionService.js";
 
@@ -38,6 +39,7 @@ async function startServer(): Promise<void> {
       webOrigin: environment.webOrigin,
     },
     createAssetRepository(dataSource),
+    createStatusHistoryRepository(dataSource),
   ).listen(
     environment.port,
     "0.0.0.0",

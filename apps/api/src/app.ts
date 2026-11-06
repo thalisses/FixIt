@@ -7,7 +7,10 @@ import {
 } from "./routes/healthRoutes.js";
 import { createUserRoutes } from "./routes/userRoutes.js";
 import { createUserManagementRoutes } from "./routes/userManagementRoutes.js";
+import type { StatusHistoryRepository } from "./repositories/statusHistoryRepository.js";
+import { createStatusHistoryRoutes } from "./routes/statusHistoryRoutes.js";
 import { createAssetService } from "./services/assetService.js";
+import { createStatusHistoryService } from "./services/statusHistoryService.js";
 import {
   createUserService,
   type UserRepository,
@@ -31,6 +34,7 @@ export function createApp(
   userManagementRepository: UserManagementRepository,
   options: { secureCookies: boolean; webOrigin: string },
   assetRepository?: AssetRepository,
+  statusHistoryRepository?: StatusHistoryRepository,
 ): Express {
   const app = express();
 
@@ -60,6 +64,14 @@ export function createApp(
         createAssetService(assetRepository),
         sessionService,
         options.webOrigin,
+      ),
+    );
+  }
+  if (statusHistoryRepository) {
+    app.use(
+      createStatusHistoryRoutes(
+        createStatusHistoryService(statusHistoryRepository),
+        sessionService,
       ),
     );
   }
