@@ -38,6 +38,8 @@ export interface StatusHistoryService {
     entry: Observation,
     manager?: EntityManager,
   ): Promise<StatusHistory>;
+  /** Devolve null quando a solicitação não existe. */
+  listBySolicitation(solicitacaoId: number): Promise<StatusHistory[] | null>;
 }
 
 export function createStatusHistoryService(
@@ -98,6 +100,14 @@ export function createStatusHistoryService(
         },
         manager,
       );
+    },
+
+    async listBySolicitation(solicitacaoId) {
+      if (!(await repository.solicitationExists(solicitacaoId))) {
+        return null;
+      }
+
+      return repository.listBySolicitation(solicitacaoId);
     },
   };
 }

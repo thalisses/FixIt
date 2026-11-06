@@ -11,8 +11,9 @@ import {
   InvalidStatusHistoryError,
 } from "./statusHistoryService.js";
 
-function createFakeRepository() {
+function createFakeRepository(existingSolicitations: number[] = []) {
   const saved: { entry: NewStatusHistory; manager?: EntityManager }[] = [];
+  const listed: number[] = [];
   const repository: StatusHistoryRepository = {
     async create(entry, manager) {
       saved.push({ entry, manager });
@@ -21,8 +22,19 @@ function createFakeRepository() {
         dataHora: new Date(),
       });
     },
+    async solicitationExists(solicitacaoId) {
+      return existingSolicitations.includes(solicitacaoId);
+    },
+    async listBySolicitation(solicitacaoId) {
+      listed.push(solicitacaoId);
+      return saved
+        .filter(({ entry }) => entry.solicitacaoId === solicitacaoId)
+        .map(({ entry }, index) =>
+          Object.assign(new StatusHistory(), entry, { id: index + 1 }),
+        );
+    },
   };
-  return { repository, saved };
+  return { repository, saved, listed };
 }
 
 const author = { solicitacaoId: 7, autorId: "user-1" };
@@ -123,5 +135,24 @@ describe("status history service", () => {
       manager,
       manager,
     ]);
+  });
+
+  it("lists the records of an existing solicitation", async () => {
+    const { repository } = createFakeRepository([author.solicitacaoId]);
+    const service = createStatusHistoryService(repository);
+    await service.recordOpening(author);
+
+    const history = await service.listBySolicitation(author.solicitacaoId);
+
+    expect(history?.map(({ tipo }) => tipo)).toEqual([TipoRegistro.ABERTURA]);
+  });
+
+  it("answers null for a solicitation that does not exist", async () => {
+    const { repository, listed } = createFakeRepository();
+
+    await expect(
+      createStatusHistoryService(repository).listBySolicitation(99),
+    ).resolves.toBeNull();
+    expect(listed).toHaveLength(0);
   });
 });
