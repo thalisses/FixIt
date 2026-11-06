@@ -24,6 +24,27 @@ export interface NewAssetInput {
   garantia: string | null;
 }
 
+export type AreaTecnica =
+  | "ELETRICA"
+  | "HIDRAULICA"
+  | "INFORMATICA"
+  | "ESTRUTURAL"
+  | "OUTROS";
+
+export type StatusSolicitacao =
+  | "EM_ABERTO"
+  | "EM_ATENDIMENTO"
+  | "CONCLUIDO"
+  | "CANCELADA";
+
+/** Uma linha do histórico de manutenções do bem (US006). */
+export interface AssetSolicitation {
+  id: number;
+  data: string;
+  tipoProblema: AreaTecnica;
+  status: StatusSolicitacao;
+}
+
 export type AssetFieldErrors = Record<string, string>;
 
 export class AssetApiError extends Error {
@@ -74,6 +95,21 @@ export async function updateAsset(
       "Não foi possível salvar as alterações.",
     ),
   );
+}
+
+export async function listAssetSolicitations(
+  id: number,
+): Promise<AssetSolicitation[]> {
+  const data = await request(
+    `/api/assets/${encodeURIComponent(id)}/solicitations`,
+    { credentials: "same-origin" },
+    "Não foi possível carregar o histórico de manutenções.",
+  );
+
+  if (!Array.isArray(data) || !data.every(isAssetSolicitation)) {
+    throw invalidResponse();
+  }
+  return data;
 }
 
 function jsonRequest(method: string, body: unknown): RequestInit {
@@ -131,7 +167,7 @@ function invalidResponse(): AssetApiError {
   return new AssetApiError(
     200,
     "INVALID_RESPONSE",
-    "A resposta do servidor não contém dados válidos do bem.",
+    "A resposta do servidor não contém dados válidos.",
   );
 }
 
@@ -143,6 +179,16 @@ function isAsset(value: unknown): value is Asset {
     typeof value.descricao === "string" &&
     typeof value.localizacao === "string" &&
     typeof value.estadoConservacao === "string"
+  );
+}
+
+function isAssetSolicitation(value: unknown): value is AssetSolicitation {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.data === "string" &&
+    typeof value.tipoProblema === "string" &&
+    typeof value.status === "string"
   );
 }
 

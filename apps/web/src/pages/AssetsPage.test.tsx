@@ -29,9 +29,16 @@ interface Backend {
   list?(url: string): Response;
   post?(body: unknown): Response;
   patch?(url: string, body: unknown): Response;
+  solicitations?(url: string): Response;
 }
 
-function stubBackend({ role = "GESTOR", list, post, patch }: Backend) {
+function stubBackend({
+  role = "GESTOR",
+  list,
+  post,
+  patch,
+  solicitations = () => jsonResponse({ data: [] }),
+}: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -47,6 +54,9 @@ function stubBackend({ role = "GESTOR", list, post, patch }: Backend) {
           },
         },
       });
+    }
+    if (url.endsWith("/solicitations")) {
+      return solicitations(url);
     }
     if (init?.method === "POST" && post) {
       return post(body);
@@ -334,7 +344,9 @@ describe("AssetsPage detail", () => {
     expect(container.textContent).toContain("Bloco C, sala 12");
     expect(container.textContent).toContain("01/03/2025");
     expect(container.textContent).toContain("Não informada");
-    expect(container.textContent).toContain("Nenhuma manutenção registrada.");
+    expect(container.textContent).toContain(
+      "Nenhuma manutenção registrada para este bem.",
+    );
   });
 
   it("saves the changes and shows them immediately (US005 CA2)", async () => {
@@ -495,6 +507,99 @@ describe("AssetsPage detail", () => {
     expect(
       fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH"),
     ).toBe(false);
+  });
+});
+
+describe("AssetsPage maintenance history", () => {
+  const solicitations = [
+    {
+      id: 4,
+      data: "2026-09-01T12:00:00.000Z",
+      tipoProblema: "ELETRICA",
+      status: "CONCLUIDO",
+    },
+    {
+      // 22h30 do dia 20 em Brasília, já dia 21 em UTC.
+      id: 9,
+      data: "2026-10-21T01:30:00.000Z",
+      tipoProblema: "INFORMATICA",
+      status: "EM_ATENDIMENTO",
+    },
+  ];
+
+  function historyRows() {
+    return Array.from(
+      container.querySelectorAll('[aria-labelledby="asset-history-title"] tbody tr'),
+    ).map((row) =>
+      Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent),
+    );
+  }
+
+  it("lists the date, problem type and status in order (US006 CA1)", async () => {
+    const fetchMock = stubBackend({
+      solicitations: () => jsonResponse({ data: solicitations }),
+    });
+    await mountPage();
+
+    await clickButton("Ver ficha de PAT-1");
+
+    expect(historyRows()).toEqual([
+      ["01/09/2026", "Elétrica", "Concluído"],
+      ["20/10/2026", "Informática", "Em atendimento"],
+    ]);
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => String(url) === "/api/assets/1/solicitations",
+      ),
+    ).toBe(true);
+    expect(container.textContent).not.toContain("Nenhuma manutenção");
+  });
+
+  it("offers a retry when the history fails", async () => {
+    let attempts = 0;
+    stubBackend({
+      solicitations: () => {
+        attempts += 1;
+        return attempts === 1
+          ? jsonResponse(
+              { error: { code: "INTERNAL_SERVER_ERROR", message: "Ocorreu um erro interno." } },
+              500,
+            )
+          : jsonResponse({ data: solicitations });
+      },
+    });
+    await mountPage();
+    await clickButton("Ver ficha de PAT-1");
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+      "Ocorreu um erro interno.",
+    );
+
+    await clickButton("Tentar novamente");
+
+    expect(historyRows()).toHaveLength(2);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("checks the session again when the history answers 401", async () => {
+    const fetchMock = stubBackend({
+      solicitations: () =>
+        jsonResponse(
+          { error: { code: "UNAUTHENTICATED", message: "Sem sessão." } },
+          401,
+        ),
+    });
+    await mountPage();
+    const before = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === "/api/sessions/current",
+    ).length;
+
+    await clickButton("Ver ficha de PAT-1");
+
+    const after = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === "/api/sessions/current",
+    ).length;
+    expect(after).toBeGreaterThan(before);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Asset } from "../../lib/assetApi";
 import { AssetEditForm } from "./AssetEditForm";
+import { AssetMaintenanceHistory } from "./AssetMaintenanceHistory";
 import { ConditionBadge, formatDate } from "./assetPresentation";
 
 interface AssetDetailProps {
@@ -92,12 +93,10 @@ export function AssetDetail({
         </div>
       </div>
 
-      <div className="asset-card">
-        <h2>Histórico de manutenções</h2>
-        <p className="asset-muted" role="status">
-          Nenhuma manutenção registrada.
-        </p>
-      </div>
+      <AssetMaintenanceHistory
+        assetId={asset.id}
+        onRequestError={onRequestError}
+      />
     </section>
   );
 }

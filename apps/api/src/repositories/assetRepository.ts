@@ -1,5 +1,6 @@
 import { ILike, QueryFailedError, type DataSource } from "typeorm";
 import { Asset, type EstadoConservacao } from "../entities/Asset.js";
+import { Solicitation } from "../entities/Solicitation.js";
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 
@@ -18,6 +19,11 @@ export interface AssetRepository {
   create(asset: NewAsset): Promise<Asset>;
   search(term?: string): Promise<Asset[]>;
   update(id: number, changes: AssetChanges): Promise<Asset | null>;
+  /**
+   * Solicitações ligadas ao bem, da mais antiga para a mais recente.
+   * Devolve null quando o bem não existe.
+   */
+  findSolicitations(id: number): Promise<Solicitation[] | null>;
 }
 
 export class DuplicateCodigoPatrimonialError extends Error {
@@ -75,6 +81,17 @@ export function createAssetRepository(dataSource: DataSource): AssetRepository {
       }
 
       return save(repository.merge(asset, changes));
+    },
+
+    async findSolicitations(id) {
+      if (!(await repository.existsBy({ id }))) {
+        return null;
+      }
+
+      return dataSource.getRepository(Solicitation).find({
+        where: { bemId: id },
+        order: { data: "ASC", id: "ASC" },
+      });
     },
   };
 }

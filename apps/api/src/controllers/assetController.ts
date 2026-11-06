@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { getAssetSelectionVisibility } from "../auth/authorization.js";
 import type { Asset } from "../entities/Asset.js";
+import type { Solicitation } from "../entities/Solicitation.js";
 import { DuplicateCodigoPatrimonialError } from "../repositories/assetRepository.js";
 import type { AssetService } from "../services/assetService.js";
 import {
@@ -39,6 +40,20 @@ function sendDuplicateCodeError(
 
 function toMinimalAsset({ id, codigoPatrimonial, descricao }: Asset) {
   return { id, codigoPatrimonial, descricao };
+}
+
+function sendAssetNotFound(response: Response): void {
+  response.status(404).json({
+    error: {
+      code: "ASSET_NOT_FOUND",
+      message: "Bem patrimonial não encontrado.",
+    },
+  });
+}
+
+// Só os campos da ficha do bem (US006 CA1).
+function toAssetSolicitation({ id, data, tipoProblema, status }: Solicitation) {
+  return { id, data, tipoProblema, status };
 }
 
 export function createAssetController(service: AssetService) {
@@ -109,12 +124,7 @@ export function createAssetController(service: AssetService) {
       try {
         const asset = await service.update(id.data.id, changes.data);
         if (!asset) {
-          response.status(404).json({
-            error: {
-              code: "ASSET_NOT_FOUND",
-              message: "Bem patrimonial não encontrado.",
-            },
-          });
+          sendAssetNotFound(response);
           return;
         }
 
@@ -125,6 +135,32 @@ export function createAssetController(service: AssetService) {
           return;
         }
 
+        next(error);
+      }
+    },
+
+    async listSolicitations(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const id = assetIdSchema.safeParse(request.params);
+      if (!id.success) {
+        sendValidationError(response, id.error);
+        return;
+      }
+
+      try {
+        const solicitations = await service.listSolicitations(id.data.id);
+        if (!solicitations) {
+          sendAssetNotFound(response);
+          return;
+        }
+
+        response
+          .status(200)
+          .json({ data: solicitations.map(toAssetSolicitation) });
+      } catch (error) {
         next(error);
       }
     },

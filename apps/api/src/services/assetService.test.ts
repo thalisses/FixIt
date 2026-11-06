@@ -29,6 +29,9 @@ function createFakeRepository(): AssetRepository {
     async update() {
       return null;
     },
+    async findSolicitations(id) {
+      return assets.some((asset) => asset.id === id) ? [] : null;
+    },
   };
 }
 
@@ -68,5 +71,13 @@ describe("asset service", () => {
     await expect(
       service.register({ ...projetor, codigoPatrimonial: " PAT-1 " }),
     ).rejects.toBeInstanceOf(DuplicateCodigoPatrimonialError);
+  });
+
+  it("lists the solicitations of an asset, or null when it does not exist", async () => {
+    const service = createAssetService(createFakeRepository());
+    await service.register(projetor);
+
+    await expect(service.listSolicitations(1)).resolves.toEqual([]);
+    await expect(service.listSolicitations(2)).resolves.toBeNull();
   });
 });

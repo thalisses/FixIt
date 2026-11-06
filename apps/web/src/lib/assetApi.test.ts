@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AssetApiError,
   createAsset,
+  listAssetSolicitations,
   listAssets,
   updateAsset,
   type Asset,
@@ -101,6 +102,28 @@ describe("assetApi", () => {
     stubFetch({ data: [{ id: "x" }] });
 
     await expect(listAssets()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+
+  it("lists the solicitations of an asset", async () => {
+    const solicitation = {
+      id: 3,
+      data: "2026-10-05T12:00:00.000Z",
+      tipoProblema: "ELETRICA",
+      status: "EM_ABERTO",
+    };
+    const fetchMock = stubFetch({ data: [solicitation] });
+
+    await expect(listAssetSolicitations(7)).resolves.toEqual([solicitation]);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/assets/7/solicitations");
+  });
+
+  it("refuses a history without valid solicitations", async () => {
+    stubFetch({ data: [{ id: 3 }] });
+
+    await expect(listAssetSolicitations(7)).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
   });
