@@ -3,6 +3,12 @@ import type { Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import type { Asset } from "../entities/Asset.js";
+import {
+  AreaTecnica,
+  NivelUrgencia,
+  Solicitation,
+  StatusSolicitacao,
+} from "../entities/Solicitation.js";
 import { AuthSession } from "../entities/AuthSession.js";
 import { User, UserRole } from "../entities/User.js";
 import {
@@ -72,11 +78,23 @@ afterEach(async () => {
   });
 });
 
-function createFakeRepository(): AssetRepository & { assets: Asset[] } {
+function createFakeRepository(
+  solicitationsByAsset: Record<number, Solicitation[]> = {},
+): AssetRepository & { assets: Asset[]; solicitationQueries: number[] } {
   const assets: Asset[] = [];
+  const solicitationQueries: number[] = [];
 
   return {
     assets,
+    solicitationQueries,
+    async findSolicitations(id) {
+      solicitationQueries.push(id);
+      if (!assets.some((asset) => asset.id === id)) {
+        return null;
+      }
+
+      return solicitationsByAsset[id] ?? [];
+    },
     async create(asset) {
       const exists = assets.some(
         ({ codigoPatrimonial }) => codigoPatrimonial === asset.codigoPatrimonial,
@@ -335,6 +353,7 @@ describe("POST /api/assets", () => {
       },
       search: async () => [],
       update: async () => null,
+      findSolicitations: async () => null,
     });
 
     const response = await post(baseUrl, JSON.stringify(projetor));
@@ -795,6 +814,166 @@ describe("PATCH /api/assets/:id", () => {
           localizacao: "Localização é obrigatória.",
           estadoConservacao: "Estado de conservação inválido.",
         },
+      },
+    });
+  });
+});
+
+describe("GET /api/assets/:id/solicitations", () => {
+  function solicitation(id: number, changes: Partial<Solicitation>) {
+    return Object.assign(new Solicitation(), {
+      id,
+      data: new Date(`2026-10-0${id}T09:00:00.000Z`),
+      local: "Bloco C, sala 12",
+      tipoProblema: AreaTecnica.ELETRICA,
+      descricaoProblema: "Projetor não liga",
+      urgencia: NivelUrgencia.ALTA,
+      status: StatusSolicitacao.EM_ABERTO,
+      solicitanteId: "user-3",
+      bemId: 1,
+      ...changes,
+    });
+  }
+
+  const solicitations = [
+    solicitation(1, { status: StatusSolicitacao.CONCLUIDO }),
+    solicitation(2, {
+      tipoProblema: AreaTecnica.INFORMATICA,
+      status: StatusSolicitacao.EM_ATENDIMENTO,
+    }),
+  ];
+
+  async function startWithAsset(
+    byAsset: Record<number, Solicitation[]> = { 1: solicitations },
+  ) {
+    const repository = createFakeRepository(byAsset);
+    const baseUrl = await startServer(repository);
+    await post(baseUrl, JSON.stringify(projetor));
+    repository.solicitationQueries.length = 0;
+    return { baseUrl, repository };
+  }
+
+  function get(
+    baseUrl: string,
+    id: string,
+    headers: Record<string, string> = authenticatedHeaders,
+  ): Promise<Response> {
+    return fetch(`${baseUrl}/api/assets/${id}/solicitations`, { headers });
+  }
+
+  it.each([UserRole.GESTOR, UserRole.MANUTENTOR])(
+    "lets %s see the solicitations of an asset",
+    async (role) => {
+      const { baseUrl } = await startWithAsset();
+      loggedUser.role = role;
+
+      const response = await get(baseUrl, "1");
+
+      expect(response.status).toBe(200);
+    },
+  );
+
+  it("refuses a Cliente without reading the solicitations", async () => {
+    const { baseUrl, repository } = await startWithAsset();
+    loggedUser.role = UserRole.CLIENTE;
+
+    const response = await get(baseUrl, "1");
+
+    expect(response.status).toBe(403);
+    expect(repository.solicitationQueries).toHaveLength(0);
+  });
+
+  it("refuses a request without a session", async () => {
+    const { baseUrl, repository } = await startWithAsset();
+
+    const response = await get(baseUrl, "1", {});
+
+    expect(response.status).toBe(401);
+    expect(repository.solicitationQueries).toHaveLength(0);
+  });
+
+  it("lists the date, problem type and status of each solicitation (CA1)", async () => {
+    const { baseUrl } = await startWithAsset();
+
+    const response = await get(baseUrl, "1");
+
+    await expect(response.json()).resolves.toEqual({
+      data: [
+        {
+          id: 1,
+          data: "2026-10-01T09:00:00.000Z",
+          tipoProblema: "ELETRICA",
+          status: "CONCLUIDO",
+        },
+        {
+          id: 2,
+          data: "2026-10-02T09:00:00.000Z",
+          tipoProblema: "INFORMATICA",
+          status: "EM_ATENDIMENTO",
+        },
+      ],
+    });
+  });
+
+  it("answers an empty list for an asset without solicitations (CA2)", async () => {
+    const { baseUrl } = await startWithAsset({});
+
+    const response = await get(baseUrl, "1");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: [] });
+  });
+
+  it("answers 404 for an asset that does not exist", async () => {
+    const { baseUrl } = await startWithAsset();
+
+    const response = await get(baseUrl, "99");
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "ASSET_NOT_FOUND",
+        message: "Bem patrimonial não encontrado.",
+      },
+    });
+  });
+
+  it("refuses an invalid id", async () => {
+    const { baseUrl, repository } = await startWithAsset();
+
+    const response = await get(baseUrl, "abc");
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Dados do bem patrimonial inválidos.",
+        fields: { id: "Identificador inválido." },
+      },
+    });
+    expect(repository.solicitationQueries).toHaveLength(0);
+  });
+
+  it("does not expose internal details on an unexpected failure", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const baseUrl = await startServer({
+      create: async () => {
+        throw new Error("Creating is not used in this test.");
+      },
+      search: async () => [],
+      update: async () => null,
+      findSolicitations: async () => {
+        throw new Error("connection to 10.0.0.5 refused");
+      },
+    });
+
+    const response = await get(baseUrl, "1");
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Ocorreu um erro interno.",
       },
     });
   });

@@ -22,6 +22,12 @@ export function createAssetRoutes(
   );
 
   router.get("/api/assets", requireAuth, controller.list);
+  router.get(
+    "/api/assets/:id/solicitations",
+    requireAuth,
+    requireAssetManager,
+    controller.listSolicitations,
+  );
   router.post(
     "/api/assets",
     requireAuth,

@@ -1,4 +1,5 @@
 import type { Asset } from "../entities/Asset.js";
+import type { Solicitation } from "../entities/Solicitation.js";
 import type {
   AssetChanges,
   AssetRepository,
@@ -9,6 +10,7 @@ export interface AssetService {
   register(asset: NewAsset): Promise<Asset>;
   search(term?: string): Promise<Asset[]>;
   update(id: number, changes: AssetChanges): Promise<Asset | null>;
+  listSolicitations(id: number): Promise<Solicitation[] | null>;
 }
 
 export function createAssetService(repository: AssetRepository): AssetService {
@@ -26,6 +28,10 @@ export function createAssetService(repository: AssetRepository): AssetService {
 
     update(id, changes) {
       return repository.update(id, changes);
+    },
+
+    listSolicitations(id) {
+      return repository.findSolicitations(id);
     },
   };
 }
