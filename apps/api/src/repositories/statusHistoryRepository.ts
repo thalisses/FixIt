@@ -11,12 +11,22 @@ export interface NewStatusHistory {
   descricao: string | null;
 }
 
+/** O que decide quem pode registrar observações (US017). */
+export interface SolicitationState {
+  responsavelId: string | null;
+  status: StatusSolicitacao;
+}
+
 export interface StatusHistoryRepository {
   create(
     entry: NewStatusHistory,
     manager?: EntityManager,
   ): Promise<StatusHistory>;
   solicitationExists(solicitacaoId: number): Promise<boolean>;
+  /** Devolve null quando a solicitação não existe. */
+  findSolicitationState(
+    solicitacaoId: number,
+  ): Promise<SolicitationState | null>;
   /** Do mais antigo para o mais novo, com o autor carregado. */
   listBySolicitation(solicitacaoId: number): Promise<StatusHistory[]>;
 }
@@ -34,6 +44,16 @@ export function createStatusHistoryRepository(
       return dataSource
         .getRepository(Solicitation)
         .existsBy({ id: solicitacaoId });
+    },
+
+    async findSolicitationState(solicitacaoId) {
+      const solicitation = await dataSource.getRepository(Solicitation).findOne({
+        where: { id: solicitacaoId },
+        select: { id: true, responsavelId: true, status: true },
+      });
+      return solicitation
+        ? { responsavelId: solicitation.responsavelId, status: solicitation.status }
+        : null;
     },
 
     listBySolicitation(solicitacaoId) {

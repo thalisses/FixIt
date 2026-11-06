@@ -6,7 +6,11 @@ import { AuthSession } from "../entities/AuthSession.js";
 import { StatusSolicitacao } from "../entities/Solicitation.js";
 import { StatusHistory, TipoRegistro } from "../entities/StatusHistory.js";
 import { User, UserRole } from "../entities/User.js";
-import type { StatusHistoryRepository } from "../repositories/statusHistoryRepository.js";
+import type {
+  NewStatusHistory,
+  SolicitationState,
+  StatusHistoryRepository,
+} from "../repositories/statusHistoryRepository.js";
 import type { SessionRepository } from "../services/sessionService.js";
 import type { UserManagementRepository } from "../services/userManagementService.js";
 import type { UserRepository } from "../services/userService.js";
@@ -106,15 +110,31 @@ const timeline = [
 
 function createFakeRepository(
   histories: Record<number, StatusHistory[]>,
-): StatusHistoryRepository & { listed: number[] } {
+  states: Record<number, SolicitationState> = {},
+): StatusHistoryRepository & { listed: number[]; saved: NewStatusHistory[] } {
   const listed: number[] = [];
+  const saved: NewStatusHistory[] = [];
   return {
     listed,
-    async create() {
-      throw new Error("Recording is not used in this test.");
+    saved,
+    async create(entry) {
+      saved.push(entry);
+      const created = Object.assign(new StatusHistory(), entry, {
+        id: 100 + saved.length,
+        dataHora: new Date("2026-11-06T15:00:00.000Z"),
+        autor: Object.assign(new User(), {
+          id: entry.autorId,
+          fullName: "Ana Silva",
+        }),
+      });
+      (histories[entry.solicitacaoId] ??= []).push(created);
+      return created;
     },
     async solicitationExists(id) {
       return id in histories;
+    },
+    async findSolicitationState(id) {
+      return states[id] ?? null;
     },
     async listBySolicitation(id) {
       listed.push(id);
@@ -310,5 +330,205 @@ describe("GET /api/solicitations/:id/history", () => {
         message: "Ocorreu um erro interno.",
       },
     });
+  });
+});
+
+describe("POST /api/solicitations/:id/observations", () => {
+  const authenticated = {
+    "Content-Type": "application/json",
+    Cookie: `fixit_session=${sessionToken}`,
+    Origin: webOrigin,
+  };
+
+  function inService(responsavelId: string | null) {
+    return { 7: { responsavelId, status: StatusSolicitacao.EM_ATENDIMENTO } };
+  }
+
+  function postObservation(
+    baseUrl: string,
+    id: string | number,
+    body: unknown,
+    headers: Record<string, string> = authenticated,
+  ): Promise<Response> {
+    return fetch(`${baseUrl}/api/solicitations/${id}/observations`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("records the observation with the author's name and the date (CA1)", async () => {
+    loggedUser.role = UserRole.MANUTENTOR;
+    const baseUrl = await startServer(
+      createFakeRepository({ 7: [opening] }, inService("user-1")),
+    );
+
+    const response = await postObservation(baseUrl, 7, {
+      descricao: "  Troquei o disjuntor  ",
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        observation: {
+          id: 101,
+          tipo: "OBSERVACAO",
+          statusAnterior: null,
+          statusNovo: null,
+          descricao: "Troquei o disjuntor",
+          dataHora: "2026-11-06T15:00:00.000Z",
+          autor: { id: "user-1", fullName: "Ana Silva" },
+        },
+      },
+    });
+  });
+
+  it("keeps the earlier observations when a new one arrives (CA2)", async () => {
+    loggedUser.role = UserRole.MANUTENTOR;
+    const baseUrl = await startServer(
+      createFakeRepository({ 7: [opening] }, inService("user-1")),
+    );
+
+    await postObservation(baseUrl, 7, { descricao: "Primeira visita" });
+    await postObservation(baseUrl, 7, { descricao: "Peça trocada" });
+    const history = await (await getHistory(baseUrl, 7)).json();
+
+    expect(
+      history.data.map(({ tipo, descricao }: { tipo: string; descricao: string }) => [
+        tipo,
+        descricao,
+      ]),
+    ).toEqual([
+      ["ABERTURA", null],
+      ["OBSERVACAO", "Primeira visita"],
+      ["OBSERVACAO", "Peça trocada"],
+    ]);
+  });
+
+  it.each([
+    ["a Gestor who is not in charge", "user-2"],
+    ["anyone while nobody is in charge", null],
+  ])("refuses %s and saves nothing", async (_case, responsavelId) => {
+    const repository = createFakeRepository({ 7: [opening] }, inService(responsavelId));
+    const baseUrl = await startServer(repository);
+
+    const response = await postObservation(baseUrl, 7, { descricao: "Ok" });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "NOT_RESPONSIBLE",
+        message: "Só o responsável pela solicitação pode registrar observações.",
+      },
+    });
+    expect(repository.saved).toHaveLength(0);
+  });
+
+  it("refuses a closed solicitation", async () => {
+    const repository = createFakeRepository(
+      { 7: [opening] },
+      { 7: { responsavelId: "user-1", status: StatusSolicitacao.CONCLUIDO } },
+    );
+    const baseUrl = await startServer(repository);
+
+    const response = await postObservation(baseUrl, 7, { descricao: "Ok" });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "SOLICITATION_CLOSED",
+        message: "A solicitação já foi encerrada.",
+      },
+    });
+    expect(repository.saved).toHaveLength(0);
+  });
+
+  it("answers 404 for a solicitation that does not exist", async () => {
+    const baseUrl = await startServer(createFakeRepository({}));
+
+    const response = await postObservation(baseUrl, 8, { descricao: "Ok" });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SOLICITATION_NOT_FOUND" },
+    });
+  });
+
+  it.each([
+    ["a blank text", { descricao: "   " }, "Escreva a observação."],
+    ["a missing text", {}, "Escreva a observação."],
+    [
+      "a text over 2,000 characters",
+      { descricao: "a".repeat(2001) },
+      "A observação pode ter até 2.000 caracteres.",
+    ],
+  ])("refuses %s and saves nothing", async (_case, body, message) => {
+    const repository = createFakeRepository({ 7: [opening] }, inService("user-1"));
+    const baseUrl = await startServer(repository);
+
+    const response = await postObservation(baseUrl, 7, body);
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "VALIDATION_ERROR",
+        message,
+        fields: { descricao: message },
+      },
+    });
+    expect(repository.saved).toHaveLength(0);
+  });
+
+  it("accepts exactly 2,000 characters", async () => {
+    const baseUrl = await startServer(
+      createFakeRepository({ 7: [opening] }, inService("user-1")),
+    );
+
+    const response = await postObservation(baseUrl, 7, {
+      descricao: "a".repeat(2000),
+    });
+
+    expect(response.status).toBe(201);
+  });
+
+  it("refuses an invalid id", async () => {
+    const baseUrl = await startServer(createFakeRepository({}));
+
+    const response = await postObservation(baseUrl, "abc", { descricao: "Ok" });
+
+    expect(response.status).toBe(422);
+  });
+
+  it("refuses a request without a session and saves nothing", async () => {
+    const repository = createFakeRepository({ 7: [opening] }, inService("user-1"));
+    const baseUrl = await startServer(repository);
+
+    const response = await postObservation(
+      baseUrl,
+      7,
+      { descricao: "Ok" },
+      { "Content-Type": "application/json", Origin: webOrigin },
+    );
+
+    expect(response.status).toBe(401);
+    expect(repository.saved).toHaveLength(0);
+  });
+
+  it("refuses a request from another origin and saves nothing", async () => {
+    const repository = createFakeRepository({ 7: [opening] }, inService("user-1"));
+    const baseUrl = await startServer(repository);
+
+    const response = await postObservation(
+      baseUrl,
+      7,
+      { descricao: "Ok" },
+      { ...authenticated, Origin: "http://evil.example" },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "ORIGIN_NOT_ALLOWED" },
+    });
+    expect(repository.saved).toHaveLength(0);
   });
 });

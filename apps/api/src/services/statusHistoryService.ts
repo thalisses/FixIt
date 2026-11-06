@@ -10,6 +10,32 @@ export class InvalidStatusHistoryError extends Error {
   }
 }
 
+export class SolicitationNotFoundError extends Error {
+  constructor() {
+    super("Solicitação não encontrada.");
+    this.name = "SolicitationNotFoundError";
+  }
+}
+
+export class NotResponsibleError extends Error {
+  constructor() {
+    super("Só o responsável pela solicitação pode registrar observações.");
+    this.name = "NotResponsibleError";
+  }
+}
+
+export class SolicitationClosedError extends Error {
+  constructor() {
+    super("A solicitação já foi encerrada.");
+    this.name = "SolicitationClosedError";
+  }
+}
+
+const CLOSED_STATUSES = new Set([
+  StatusSolicitacao.CONCLUIDO,
+  StatusSolicitacao.CANCELADA,
+]);
+
 interface Author {
   solicitacaoId: number;
   autorId: string;
@@ -38,6 +64,11 @@ export interface StatusHistoryService {
     entry: Observation,
     manager?: EntityManager,
   ): Promise<StatusHistory>;
+  /**
+   * Observação registrada pela rota (US017): só o responsável grava, e só
+   * enquanto a solicitação não foi encerrada. Nada é sobrescrito.
+   */
+  addObservation(entry: Observation): Promise<StatusHistory>;
   /** Devolve null quando a solicitação não existe. */
   listBySolicitation(solicitacaoId: number): Promise<StatusHistory[] | null>;
 }
@@ -45,7 +76,7 @@ export interface StatusHistoryService {
 export function createStatusHistoryService(
   repository: StatusHistoryRepository,
 ): StatusHistoryService {
-  return {
+  const service: StatusHistoryService = {
     recordOpening({ solicitacaoId, autorId }, manager) {
       return repository.create(
         {
@@ -102,6 +133,21 @@ export function createStatusHistoryService(
       );
     },
 
+    async addObservation(entry) {
+      const state = await repository.findSolicitationState(entry.solicitacaoId);
+      if (!state) {
+        throw new SolicitationNotFoundError();
+      }
+      if (state.responsavelId !== entry.autorId) {
+        throw new NotResponsibleError();
+      }
+      if (CLOSED_STATUSES.has(state.status)) {
+        throw new SolicitationClosedError();
+      }
+
+      return service.recordObservation(entry);
+    },
+
     async listBySolicitation(solicitacaoId) {
       if (!(await repository.solicitationExists(solicitacaoId))) {
         return null;
@@ -110,4 +156,6 @@ export function createStatusHistoryService(
       return repository.listBySolicitation(solicitacaoId);
     },
   };
+
+  return service;
 }
