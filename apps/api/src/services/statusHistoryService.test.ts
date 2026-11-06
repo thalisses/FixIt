@@ -4,14 +4,21 @@ import { StatusSolicitacao } from "../entities/Solicitation.js";
 import { StatusHistory, TipoRegistro } from "../entities/StatusHistory.js";
 import type {
   NewStatusHistory,
+  SolicitationState,
   StatusHistoryRepository,
 } from "../repositories/statusHistoryRepository.js";
 import {
   createStatusHistoryService,
   InvalidStatusHistoryError,
+  NotResponsibleError,
+  SolicitationClosedError,
+  SolicitationNotFoundError,
 } from "./statusHistoryService.js";
 
-function createFakeRepository(existingSolicitations: number[] = []) {
+function createFakeRepository(
+  existingSolicitations: number[] = [],
+  states: Record<number, SolicitationState> = {},
+) {
   const saved: { entry: NewStatusHistory; manager?: EntityManager }[] = [];
   const listed: number[] = [];
   const repository: StatusHistoryRepository = {
@@ -24,6 +31,9 @@ function createFakeRepository(existingSolicitations: number[] = []) {
     },
     async solicitationExists(solicitacaoId) {
       return existingSolicitations.includes(solicitacaoId);
+    },
+    async findSolicitationState(solicitacaoId) {
+      return states[solicitacaoId] ?? null;
     },
     async listBySolicitation(solicitacaoId) {
       listed.push(solicitacaoId);
@@ -154,5 +164,87 @@ describe("status history service", () => {
       createStatusHistoryService(repository).listBySolicitation(99),
     ).resolves.toBeNull();
     expect(listed).toHaveLength(0);
+  });
+});
+
+describe("observations added through the route (US017)", () => {
+  const inService = (responsavelId: string | null) => ({
+    7: { responsavelId, status: StatusSolicitacao.EM_ATENDIMENTO },
+  });
+
+  it("records the observation of the person in charge (CA1)", async () => {
+    const { repository, saved } = createFakeRepository([], inService("user-1"));
+
+    await createStatusHistoryService(repository).addObservation({
+      ...author,
+      descricao: " Troquei o disjuntor ",
+    });
+
+    expect(saved.at(0)?.entry).toEqual({
+      ...author,
+      tipo: TipoRegistro.OBSERVACAO,
+      statusAnterior: null,
+      statusNovo: null,
+      descricao: "Troquei o disjuntor",
+    });
+  });
+
+  it("adds a new record without touching the previous ones (CA2)", async () => {
+    const { repository, saved } = createFakeRepository([], inService("user-1"));
+    const service = createStatusHistoryService(repository);
+
+    await service.addObservation({ ...author, descricao: "Primeira" });
+    await service.addObservation({ ...author, descricao: "Segunda" });
+
+    expect(saved.map(({ entry }) => entry.descricao)).toEqual([
+      "Primeira",
+      "Segunda",
+    ]);
+  });
+
+  it.each([
+    ["someone else is in charge", "user-2"],
+    ["nobody is in charge yet", null],
+  ])("refuses when %s and saves nothing", async (_case, responsavelId) => {
+    const { repository, saved } = createFakeRepository(
+      [],
+      inService(responsavelId),
+    );
+
+    await expect(
+      createStatusHistoryService(repository).addObservation({
+        ...author,
+        descricao: "Ok",
+      }),
+    ).rejects.toBeInstanceOf(NotResponsibleError);
+    expect(saved).toHaveLength(0);
+  });
+
+  it.each([StatusSolicitacao.CONCLUIDO, StatusSolicitacao.CANCELADA])(
+    "refuses a solicitation that is %s",
+    async (status) => {
+      const { repository, saved } = createFakeRepository([], {
+        7: { responsavelId: "user-1", status },
+      });
+
+      await expect(
+        createStatusHistoryService(repository).addObservation({
+          ...author,
+          descricao: "Ok",
+        }),
+      ).rejects.toBeInstanceOf(SolicitationClosedError);
+      expect(saved).toHaveLength(0);
+    },
+  );
+
+  it("refuses a solicitation that does not exist", async () => {
+    const { repository } = createFakeRepository();
+
+    await expect(
+      createStatusHistoryService(repository).addObservation({
+        ...author,
+        descricao: "Ok",
+      }),
+    ).rejects.toBeInstanceOf(SolicitationNotFoundError);
   });
 });

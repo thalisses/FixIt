@@ -72,6 +72,7 @@ export function createApp(
       createStatusHistoryRoutes(
         createStatusHistoryService(statusHistoryRepository),
         sessionService,
+        options.webOrigin,
       ),
     );
   }
