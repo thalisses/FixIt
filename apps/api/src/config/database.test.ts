@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createDataSource } from "./database.js";
 import { Asset } from "../entities/Asset.js";
 import { Solicitation } from "../entities/Solicitation.js";
+import { StatusHistory } from "../entities/StatusHistory.js";
 import { AuthSession } from "../entities/AuthSession.js";
 import { User } from "../entities/User.js";
 import { CreateAssets1793835564779 } from "../migrations/1793835564779-CreateAssets.js";
 import { CreateAuthenticationTables1793847279000 } from "../migrations/1793847279000-CreateAuthenticationTables.js";
 import { CreateSolicitations1793897712249 } from "../migrations/1793897712249-CreateSolicitations.js";
+import { CreateStatusHistory1793969169334 } from "../migrations/1793969169334-CreateStatusHistory.js";
 
 describe("createDataSource", () => {
   it("registers authentication entities and migration without schema synchronization", () => {
@@ -26,6 +28,13 @@ describe("createDataSource", () => {
 
     expect(dataSource.options.entities).toContain(Solicitation);
     expect(dataSource.options.migrations).toContain(CreateSolicitations1793897712249);
+  });
+
+  it("registers the status history entity and its migration", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+
+    expect(dataSource.options.entities).toContain(StatusHistory);
+    expect(dataSource.options.migrations).toContain(CreateStatusHistory1793969169334);
   });
 
   it("registers the asset entity and its migration", () => {
