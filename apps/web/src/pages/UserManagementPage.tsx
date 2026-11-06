@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { AppShell } from "../components/AppShell";
+import { BackButton } from "../components/BackButton";
 import { useAuth } from "../context/AuthContext";
 import {
   changeUserRole,
@@ -9,8 +11,8 @@ import {
 } from "../lib/authApi";
 
 interface UserManagementPageProps {
-  onBack(): void;
   onLoggedOut(): void;
+  onNavigate(path: string): void;
 }
 
 interface PendingRoleChange {
@@ -27,17 +29,16 @@ const roleLabels: Record<SessionUser["role"], string> = {
 };
 
 export function UserManagementPage({
-  onBack,
   onLoggedOut,
+  onNavigate,
 }: UserManagementPageProps) {
-  const { user, logout, refresh } = useAuth();
+  const { user, refresh } = useAuth();
   const currentUserId = user?.id;
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [page, setPage] = useState(1);
   const [reloadCount, setReloadCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<
     Record<string, SessionUser["role"] | "">
@@ -92,19 +93,6 @@ export function UserManagementPage({
     return null;
   }
 
-  async function handleLogout() {
-    setIsLoggingOut(true);
-    setErrorMessage("");
-    try {
-      await logout();
-      onLoggedOut();
-    } catch {
-      setErrorMessage("Não foi possível encerrar a sessão. Tente novamente.");
-    } finally {
-      setIsLoggingOut(false);
-    }
-  }
-
   function prepareRoleChange(userId: string) {
     const role = selectedRoles[userId];
     if (!role) {
@@ -147,32 +135,13 @@ export function UserManagementPage({
   }
 
   return (
-    <div className="auth-shell">
-      <header className="auth-header">
-        <a className="auth-brand" href="/" aria-label="FixIt início">
-          <span className="auth-brand-mark" aria-hidden="true">
-            F
-          </span>
-          <span className="auth-brand-name">
-            Fix<span>It</span>
-          </span>
-        </a>
-        <div className="management-header-actions">
-          <button className="text-action" onClick={onBack} type="button">
-            Voltar
-          </button>
-          <button
-            className="text-action"
-            disabled={isLoggingOut}
-            onClick={handleLogout}
-            type="button"
-          >
-            {isLoggingOut ? "Encerrando..." : "Sair"}
-          </button>
-        </div>
-      </header>
-
-      <main className="auth-layout management-layout">
+    <AppShell
+      activePath="/users"
+      onLoggedOut={onLoggedOut}
+      onNavigate={onNavigate}
+    >
+      <div className="management-page">
+        <BackButton label="Voltar para o Início" onClick={() => onNavigate("/")} />
         <section className="registration-panel" aria-labelledby="users-title">
           <div className="form-heading">
             <p className="context-kicker">Acesso institucional</p>
@@ -325,13 +294,8 @@ export function UserManagementPage({
             </button>
           </nav>
         </section>
-      </main>
-
-      <footer className="auth-footer">
-        <span>FixIt · Gestão de manutenção patrimonial</span>
-        <span>Universidade Estadual de Maringá</span>
-      </footer>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 

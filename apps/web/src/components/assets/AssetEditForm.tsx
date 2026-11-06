@@ -1,11 +1,17 @@
 import { useState, type FormEvent } from "react";
 import {
+  confirmDiscardChanges,
+  markChangesSaved,
+  useUnsavedChanges,
+} from "../../lib/unsavedChanges";
+import {
   updateAsset,
   type Asset,
   type AssetFieldErrors,
 } from "../../lib/assetApi";
 import {
   AssetFields,
+  hasChanges,
   readFieldErrors,
   toAssetInput,
   toFormValues,
@@ -24,10 +30,18 @@ export function AssetEditForm({
   onSaved,
   onRequestError,
 }: AssetEditFormProps) {
-  const [values, setValues] = useState(() => toFormValues(asset));
+  const [initialValues] = useState(() => toFormValues(asset));
+  const [values, setValues] = useState(initialValues);
   const [fieldErrors, setFieldErrors] = useState<AssetFieldErrors>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  useUnsavedChanges(!isSaving && hasChanges(values, initialValues));
+
+  function handleCancel() {
+    if (confirmDiscardChanges()) {
+      onCancel();
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -35,7 +49,9 @@ export function AssetEditForm({
     setFieldErrors({});
     setErrorMessage("");
     try {
-      onSaved(await updateAsset(asset.id, toAssetInput(values)));
+      const saved = await updateAsset(asset.id, toAssetInput(values));
+      markChangesSaved();
+      onSaved(saved);
     } catch (error) {
       const errors = readFieldErrors(error);
       if (errors) {
@@ -69,7 +85,7 @@ export function AssetEditForm({
         <button
           className="text-action"
           disabled={isSaving}
-          onClick={onCancel}
+          onClick={handleCancel}
           type="button"
         >
           Cancelar

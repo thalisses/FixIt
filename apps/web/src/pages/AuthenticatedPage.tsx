@@ -1,106 +1,114 @@
-import { useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { AppShell } from "../components/AppShell";
+import { AssetIcon, UsersIcon } from "../components/icons";
 import { useAuth } from "../context/AuthContext";
+import type { SessionUser } from "../lib/authApi";
 
 interface AuthenticatedPageProps {
   onLoggedOut(): void;
-  onManageAssets(): void;
-  onManageUsers(): void;
+  onNavigate(path: string): void;
 }
 
-const roleLabels = {
+interface Shortcut {
+  path: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}
+
+const roleLabels: Record<SessionUser["role"], string> = {
   CLIENTE: "Cliente",
   MANUTENTOR: "Manutentor",
   GESTOR: "Gestor",
 };
 
+function shortcutsFor(role: SessionUser["role"]): Shortcut[] {
+  return [
+    ...(role !== "CLIENTE"
+      ? [
+          {
+            path: "/assets",
+            title: "Patrimônio",
+            description: "Consulte, cadastre e edite os bens da instituição.",
+            icon: <AssetIcon />,
+          },
+        ]
+      : []),
+    ...(role === "GESTOR"
+      ? [
+          {
+            path: "/users",
+            title: "Usuários",
+            description: "Altere o perfil de acesso das contas.",
+            icon: <UsersIcon />,
+          },
+        ]
+      : []),
+  ];
+}
+
 export function AuthenticatedPage({
   onLoggedOut,
-  onManageAssets,
-  onManageUsers,
+  onNavigate,
 }: AuthenticatedPageProps) {
-  const { user, logout } = useAuth();
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { user } = useAuth();
 
   if (!user) {
     return null;
   }
 
-  async function handleLogout() {
-    setErrorMessage("");
-    setIsLoggingOut(true);
-    try {
-      await logout();
-      onLoggedOut();
-    } catch {
-      setErrorMessage("Não foi possível encerrar a sessão. Tente novamente.");
-    } finally {
-      setIsLoggingOut(false);
+  const firstName = user.fullName.trim().split(/\s+/)[0];
+  const shortcuts = shortcutsFor(user.role);
+
+  function open(event: MouseEvent<HTMLAnchorElement>, path: string) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) {
+      return;
     }
+    event.preventDefault();
+    onNavigate(path);
   }
 
   return (
-    <div className="auth-shell">
-      <header className="auth-header">
-        <a className="auth-brand" href="/" aria-label="FixIt início">
-          <span className="auth-brand-mark" aria-hidden="true">
-            F
-          </span>
-          <span className="auth-brand-name">
-            Fix<span>It</span>
-          </span>
-        </a>
-        <div className="management-header-actions">
-          {user.role !== "CLIENTE" && (
-            <button
-              className="text-action"
-              onClick={onManageAssets}
-              type="button"
-            >
-              Patrimônio
-            </button>
-          )}
-          {user.role === "GESTOR" && (
-            <button
-              className="text-action"
-              onClick={onManageUsers}
-              type="button"
-            >
-              Administrar usuários
-            </button>
-          )}
-          <button
-            className="text-action"
-            disabled={isLoggingOut}
-            onClick={handleLogout}
-            type="button"
-          >
-            {isLoggingOut ? "Encerrando..." : "Sair"}
-          </button>
+    <AppShell activePath="/" onLoggedOut={onLoggedOut} onNavigate={onNavigate}>
+      <section className="home-page" aria-labelledby="welcome-title">
+        <div className="home-heading">
+          <h1 id="welcome-title">Olá, {firstName}</h1>
+          <p>
+            Você entrou como <strong>{roleLabels[user.role]}</strong> com{" "}
+            {user.email}.
+          </p>
         </div>
-      </header>
-      <main className="auth-layout authenticated-layout">
-        <section className="registration-panel" aria-labelledby="welcome-title">
-          <p className="context-kicker">Sessão ativa</p>
-          <h1 id="welcome-title">Olá, {user.fullName}</h1>
-          <p className="authenticated-copy">
-            Você entrou como <strong>{roleLabels[user.role]}</strong> usando{" "}
-            <strong>{user.email}</strong>.
+
+        {shortcuts.length > 0 && (
+          <div className="home-group">
+            <h2>Acesso rápido</h2>
+            <ul className="home-shortcuts">
+              {shortcuts.map((shortcut) => (
+                <li key={shortcut.path}>
+                  <a
+                    className="home-shortcut"
+                    href={shortcut.path}
+                    onClick={(event) => open(event, shortcut.path)}
+                  >
+                    <span className="home-shortcut-icon">{shortcut.icon}</span>
+                    <span className="home-shortcut-text">
+                      <strong>{shortcut.title}</strong>
+                      <span>{shortcut.description}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {user.role === "CLIENTE" && (
+          <p className="home-note">
+            A abertura de solicitações de manutenção ainda está em
+            desenvolvimento. Quando estiver pronta, ela aparece aqui e no menu.
           </p>
-          <p className="authenticated-copy">
-            As próximas áreas disponíveis serão definidas pelo seu perfil.
-          </p>
-          {errorMessage && (
-            <p className="form-error" role="alert">
-              {errorMessage}
-            </p>
-          )}
-        </section>
-      </main>
-      <footer className="auth-footer">
-        <span>FixIt · Gestão de manutenção patrimonial</span>
-        <span>Universidade Estadual de Maringá</span>
-      </footer>
-    </div>
+        )}
+      </section>
+    </AppShell>
   );
 }

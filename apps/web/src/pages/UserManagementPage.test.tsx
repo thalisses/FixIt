@@ -30,7 +30,7 @@ function mountPage() {
   act(() => {
     root.render(
       <AuthProvider>
-        <UserManagementPage onBack={() => {}} onLoggedOut={() => {}} />
+        <UserManagementPage onLoggedOut={() => {}} onNavigate={() => {}} />
       </AuthProvider>,
     );
   });
