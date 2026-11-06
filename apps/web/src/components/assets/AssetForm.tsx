@@ -1,4 +1,10 @@
 import { useState, type FormEvent } from "react";
+import { BackButton } from "../BackButton";
+import {
+  confirmDiscardChanges,
+  markChangesSaved,
+  useUnsavedChanges,
+} from "../../lib/unsavedChanges";
 import {
   createAsset,
   type Asset,
@@ -7,6 +13,7 @@ import {
 import {
   AssetFields,
   emptyAssetForm,
+  hasChanges,
   readFieldErrors,
   toAssetInput,
 } from "./AssetFields";
@@ -26,6 +33,13 @@ export function AssetForm({
   const [fieldErrors, setFieldErrors] = useState<AssetFieldErrors>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  useUnsavedChanges(!isSaving && hasChanges(values, emptyAssetForm));
+
+  function handleCancel() {
+    if (confirmDiscardChanges()) {
+      onCancel();
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -33,7 +47,9 @@ export function AssetForm({
     setErrorMessage("");
     setFieldErrors({});
     try {
-      onCreated(await createAsset(toAssetInput(values)));
+      const created = await createAsset(toAssetInput(values));
+      markChangesSaved();
+      onCreated(created);
     } catch (error) {
       const errors = readFieldErrors(error);
       if (errors) {
@@ -47,6 +63,7 @@ export function AssetForm({
 
   return (
     <section className="asset-page" aria-labelledby="asset-form-title">
+      <BackButton label="Voltar para Patrimônio" onClick={handleCancel} />
       <div className="asset-page-heading">
         <div>
           <h1 id="asset-form-title">Cadastrar bem</h1>
@@ -77,7 +94,7 @@ export function AssetForm({
           <button
             className="text-action"
             disabled={isSaving}
-            onClick={onCancel}
+            onClick={handleCancel}
             type="button"
           >
             Cancelar

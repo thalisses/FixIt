@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../context/AuthContext";
@@ -79,11 +79,28 @@ async function settle() {
   });
 }
 
-async function mountPage() {
+let navigations: string[] = [];
+
+// Faz o papel do App: guarda o endereço e repassa para a página.
+function Harness({ initialPath }: { initialPath: string }) {
+  const [path, setPath] = useState(initialPath);
+  return (
+    <AssetsPage
+      onLoggedOut={() => {}}
+      onNavigate={(next) => {
+        navigations.push(next);
+        setPath(next);
+      }}
+      path={path}
+    />
+  );
+}
+
+async function mountPage(initialPath = "/assets") {
   act(() => {
     root.render(
       <AuthProvider>
-        <AssetsPage onLoggedOut={() => {}} onNavigate={() => {}} />
+        <Harness initialPath={initialPath} />
       </AuthProvider>,
     );
   });
@@ -131,6 +148,8 @@ async function submit(selector = "form.asset-form") {
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("confirm", vi.fn(() => true));
+  navigations = [];
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -603,12 +622,105 @@ describe("AssetsPage maintenance history", () => {
   });
 });
 
+describe("AssetsPage addresses", () => {
+  it("gives the asset page its own address and goes back to the list", async () => {
+    stubBackend({});
+    await mountPage();
+
+    await clickButton("Ver ficha de PAT-1");
+    expect(navigations.at(-1)).toBe("/assets/1");
+
+    await clickButton("Voltar para Patrimônio");
+    expect(navigations.at(-1)).toBe("/assets");
+    expect(container.querySelector("h1")?.textContent).toBe("Patrimônio");
+  });
+
+  it("opens the asset page straight from its address, as after a reload", async () => {
+    stubBackend({});
+    await mountPage("/assets/1");
+
+    expect(container.querySelector("h1")?.textContent).toBe("Projetor Epson");
+  });
+
+  it("explains when the address points to an asset that does not exist", async () => {
+    stubBackend({});
+    await mountPage("/assets/99");
+
+    expect(container.querySelector("h1")?.textContent).toBe("Bem não encontrado");
+    await clickButton("Voltar para Patrimônio");
+    expect(navigations.at(-1)).toBe("/assets");
+  });
+
+  it("gives the registration form its own address", async () => {
+    stubBackend({});
+    await mountPage();
+
+    await clickButton("Cadastrar bem");
+
+    expect(navigations.at(-1)).toBe("/assets/novo");
+    expect(container.querySelector("h1")?.textContent).toBe("Cadastrar bem");
+  });
+});
+
+describe("AssetsPage unsaved changes", () => {
+  it("leaves an untouched form without asking", async () => {
+    stubBackend({});
+    await mountPage("/assets/novo");
+
+    await clickButton("Voltar para Patrimônio");
+
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(navigations.at(-1)).toBe("/assets");
+  });
+
+  it("asks before discarding a new asset and stays when refused", async () => {
+    stubBackend({});
+    vi.mocked(window.confirm).mockReturnValue(false);
+    await mountPage("/assets/novo");
+    setValue('input[name="codigoPatrimonial"]', "PAT-9");
+
+    await clickButton("Voltar para Patrimônio");
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Você tem alterações não salvas. Deseja sair sem salvar?",
+    );
+    expect(navigations).toEqual([]);
+    expect(container.querySelector("h1")?.textContent).toBe("Cadastrar bem");
+  });
+
+  it("discards a new asset when the person confirms", async () => {
+    stubBackend({});
+    await mountPage("/assets/novo");
+    setValue('input[name="codigoPatrimonial"]', "PAT-9");
+
+    await clickButton("Cancelar");
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(navigations.at(-1)).toBe("/assets");
+  });
+
+  it("asks before closing an edit with changes", async () => {
+    stubBackend({});
+    vi.mocked(window.confirm).mockReturnValue(false);
+    await mountPage("/assets/1");
+    await clickButton("Editar bem");
+    setValue('input[name="localizacao"]', "Sala 9");
+
+    await clickButton("Cancelar");
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(editForm)).not.toBeNull();
+  });
+});
+
 describe("AssetsPage navigation", () => {
   it("shows Usuários only to a Gestor", async () => {
     stubBackend({ role: "MANUTENTOR" });
     await mountPage();
     const links = () =>
-      Array.from(container.querySelectorAll(".app-nav-link")).map(
+      Array.from(
+        container.querySelectorAll('nav[aria-label="Navegação principal"] a'),
+      ).map(
         (link) => link.textContent,
       );
 

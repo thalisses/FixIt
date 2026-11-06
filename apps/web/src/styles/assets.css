@@ -1,89 +1,3 @@
-.app-shell {
-  display: grid;
-  min-height: 100vh;
-  grid-template-columns: 256px minmax(0, 1fr);
-  background: #f8f9ff;
-  color: #0b1c30;
-}
-
-.app-sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  height: 100vh;
-  flex-direction: column;
-  gap: 24px;
-  padding: 16px;
-  border-right: 1px solid #dce4f1;
-  background: #fff;
-}
-
-.app-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.app-nav-link {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #444651;
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  text-align: left;
-}
-
-.app-nav-link:hover {
-  background: #eff4ff;
-  color: #0b1c30;
-}
-
-.app-nav-link[aria-current="page"] {
-  background: #1e3a8a;
-  color: #fff;
-  font-weight: 600;
-}
-
-.app-content {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.app-topbar {
-  display: flex;
-  min-height: 64px;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  padding: 8px 32px;
-  border-bottom: 1px solid #dce4f1;
-  background: #fff;
-}
-
-.app-user {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.app-shell-error {
-  margin: 16px 32px 0;
-}
-
-.app-main {
-  width: 100%;
-  max-width: 1200px;
-  padding: 32px;
-}
-
 .asset-page {
   display: flex;
   flex-direction: column;
@@ -400,46 +314,9 @@
   white-space: nowrap;
 }
 
-.app-nav-link:focus-visible,
 .asset-link:focus-visible {
   outline: 2px solid #0051d5;
   outline-offset: 2px;
-}
-
-@media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .app-sidebar {
-    position: static;
-    height: auto;
-    gap: 8px;
-    padding: 8px 16px;
-    border-right: 0;
-    border-bottom: 1px solid #dce4f1;
-  }
-
-  .app-nav {
-    flex-direction: row;
-    overflow-x: auto;
-  }
-
-  .app-nav-link {
-    flex-shrink: 0;
-  }
-
-  .app-topbar {
-    padding: 8px 16px;
-  }
-
-  .app-shell-error {
-    margin: 16px 16px 0;
-  }
-
-  .app-main {
-    padding: 24px 16px;
-  }
 }
 
 @media (max-width: 640px) {
@@ -506,4 +383,12 @@
   .asset-table td.asset-table-action {
     justify-content: flex-end;
   }
+}
+
+.asset-route-title {
+  margin: 0;
+  color: #0b1c30;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
 }

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { Asset } from "../../lib/assetApi";
+import { BackButton } from "../BackButton";
+import { confirmDiscardChanges } from "../../lib/unsavedChanges";
 import { AssetEditForm } from "./AssetEditForm";
 import { AssetMaintenanceHistory } from "./AssetMaintenanceHistory";
 import { ConditionBadge, formatDate } from "./assetPresentation";
@@ -33,8 +35,24 @@ export function AssetDetail({
 
   return (
     <section className="asset-page" aria-labelledby="asset-detail-title">
+      <BackButton
+        label="Voltar para Patrimônio"
+        onClick={() => {
+          if (confirmDiscardChanges()) {
+            onBack();
+          }
+        }}
+      />
       <nav aria-label="Caminho" className="asset-breadcrumb">
-        <button className="asset-link" onClick={onBack} type="button">
+        <button
+          className="asset-link"
+          onClick={() => {
+            if (confirmDiscardChanges()) {
+              onBack();
+            }
+          }}
+          type="button"
+        >
           Patrimônio
         </button>
         <span aria-hidden="true">/</span>

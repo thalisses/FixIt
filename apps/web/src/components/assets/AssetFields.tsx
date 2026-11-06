@@ -36,6 +36,15 @@ export function toFormValues(asset: Asset): AssetFormValues {
   };
 }
 
+export function hasChanges(
+  values: AssetFormValues,
+  initial: AssetFormValues,
+): boolean {
+  return (Object.keys(initial) as (keyof AssetFormValues)[]).some(
+    (field) => values[field] !== initial[field],
+  );
+}
+
 export function toAssetInput(values: AssetFormValues): NewAssetInput {
   return {
     ...values,

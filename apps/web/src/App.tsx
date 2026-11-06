@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./styles/index.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AssetsPage } from "./pages/AssetsPage";
@@ -6,6 +6,22 @@ import { AuthenticatedPage } from "./pages/AuthenticatedPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegistrationPage } from "./pages/RegistrationPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
+import { confirmDiscardChanges } from "./lib/unsavedChanges";
+
+function isAssetPath(path: string): boolean {
+  return path === "/assets" || path.startsWith("/assets/");
+}
+
+/** Endereços que cada cargo pode abrir depois do login. */
+function canOpen(role: string, path: string): boolean {
+  if (path === "/") {
+    return true;
+  }
+  if (path === "/users") {
+    return role === "GESTOR";
+  }
+  return role !== "CLIENTE" && isAssetPath(path);
+}
 
 export function App() {
   return (
@@ -21,15 +37,39 @@ function AppContent() {
     typeof window === "undefined" ? "/" : window.location.pathname,
   );
 
+  const pathRef = useRef(currentPath);
+  pathRef.current = currentPath;
+
   useEffect(() => {
-    const updatePath = () => setCurrentPath(window.location.pathname);
+    const updatePath = () => {
+      // O voltar do navegador também pergunta antes de descartar alterações.
+      if (!confirmDiscardChanges()) {
+        window.history.pushState({}, "", pathRef.current);
+        return;
+      }
+      setCurrentPath(window.location.pathname);
+    };
     window.addEventListener("popstate", updatePath);
     return () => window.removeEventListener("popstate", updatePath);
   }, []);
 
+  // Depois do login, ou num endereço que o cargo não abre, o endereço vira o
+  // do Início, para a barra do navegador mostrar onde a pessoa está.
+  const role = user?.role;
+  useEffect(() => {
+    if (role && !canOpen(role, currentPath)) {
+      window.history.replaceState({}, "", "/");
+      setCurrentPath("/");
+    }
+  }, [role, currentPath]);
+
   function navigate(path: string) {
+    if (path === currentPath || !confirmDiscardChanges()) {
+      return;
+    }
     window.history.pushState({}, "", path);
     setCurrentPath(path);
+    window.scrollTo(0, 0);
   }
 
   if (isLoading) {
@@ -55,17 +95,18 @@ function AppContent() {
     if (user.role === "GESTOR" && currentPath === "/users") {
       return (
         <UserManagementPage
-          onBack={() => navigate("/")}
           onLoggedOut={() => navigate("/login")}
+          onNavigate={navigate}
         />
       );
     }
 
-    if (user.role !== "CLIENTE" && currentPath === "/assets") {
+    if (user.role !== "CLIENTE" && isAssetPath(currentPath)) {
       return (
         <AssetsPage
           onLoggedOut={() => navigate("/login")}
           onNavigate={navigate}
+          path={currentPath}
         />
       );
     }
@@ -73,13 +114,14 @@ function AppContent() {
     return (
       <AuthenticatedPage
         onLoggedOut={() => navigate("/login")}
-        onManageAssets={() => navigate("/assets")}
-        onManageUsers={() => navigate("/users")}
+        onNavigate={navigate}
       />
     );
   }
 
-  return ["/login", "/users", "/assets"].includes(currentPath) ? (
+  return currentPath === "/login" ||
+    currentPath === "/users" ||
+    isAssetPath(currentPath) ? (
     <LoginPage />
   ) : (
     <RegistrationPage />
