@@ -10,6 +10,7 @@ import { CreateAuthenticationTables1793847279000 } from "../migrations/179384727
 import { CreateSolicitations1793897712249 } from "../migrations/1793897712249-CreateSolicitations.js";
 import { CreateStatusHistory1793969169334 } from "../migrations/1793969169334-CreateStatusHistory.js";
 import { AddAssetToSolicitations1793972702308 } from "../migrations/1793972702308-AddAssetToSolicitations.js";
+import { AddSolicitationListIndexes1793985000000 } from "../migrations/1793985000000-AddSolicitationListIndexes.js";
 
 describe("createDataSource", () => {
   it("registers authentication entities and migration without schema synchronization", () => {
@@ -42,6 +43,14 @@ describe("createDataSource", () => {
     const dataSource = createDataSource("postgresql://localhost/fixit");
 
     expect(dataSource.options.migrations).toContain(AddAssetToSolicitations1793972702308);
+  });
+
+  it("registers the solicitation list index migration", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+
+    expect(dataSource.options.migrations).toContain(
+      AddSolicitationListIndexes1793985000000,
+    );
   });
 
   it("registers the asset entity and its migration", () => {
