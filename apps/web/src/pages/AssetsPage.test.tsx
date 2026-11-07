@@ -724,13 +724,18 @@ describe("AssetsPage navigation", () => {
         (link) => link.textContent,
       );
 
-    expect(links()).toEqual(["Início", "Patrimônio"]);
+    expect(links()).toEqual(["Início", "Solicitações", "Patrimônio"]);
 
     act(() => root.unmount());
     root = createRoot(container);
     stubBackend({ role: "GESTOR" });
     await mountPage();
 
-    expect(links()).toEqual(["Início", "Patrimônio", "Usuários"]);
+    expect(links()).toEqual([
+      "Início",
+      "Solicitações",
+      "Patrimônio",
+      "Usuários",
+    ]);
   });
 });

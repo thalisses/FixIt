@@ -5,6 +5,7 @@ import { AssetsPage } from "./pages/AssetsPage";
 import { AuthenticatedPage } from "./pages/AuthenticatedPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegistrationPage } from "./pages/RegistrationPage";
+import { SolicitationsPage } from "./pages/SolicitationsPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { confirmDiscardChanges } from "./lib/unsavedChanges";
 
@@ -14,7 +15,7 @@ function isAssetPath(path: string): boolean {
 
 /** Endereços que cada cargo pode abrir depois do login. */
 function canOpen(role: string, path: string): boolean {
-  if (path === "/") {
+  if (path === "/" || path === "/solicitations") {
     return true;
   }
   if (path === "/users") {
@@ -111,6 +112,15 @@ function AppContent() {
       );
     }
 
+    if (currentPath === "/solicitations") {
+      return (
+        <SolicitationsPage
+          onLoggedOut={() => navigate("/login")}
+          onNavigate={navigate}
+        />
+      );
+    }
+
     return (
       <AuthenticatedPage
         onLoggedOut={() => navigate("/login")}
@@ -121,6 +131,7 @@ function AppContent() {
 
   return currentPath === "/login" ||
     currentPath === "/users" ||
+    currentPath === "/solicitations" ||
     isAssetPath(currentPath) ? (
     <LoginPage />
   ) : (

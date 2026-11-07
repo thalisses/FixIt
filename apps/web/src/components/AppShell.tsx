@@ -14,6 +14,7 @@ import {
   HomeIcon,
   LogoutIcon,
   MenuIcon,
+  SolicitationIcon,
   UsersIcon,
 } from "./icons";
 
@@ -43,6 +44,11 @@ const CLOSE_DELAY_MS = 250;
 export function navItemsFor(role: SessionUser["role"]): NavItem[] {
   return [
     { path: "/", label: "Início", icon: <HomeIcon /> },
+    {
+      path: "/solicitations",
+      label: "Solicitações",
+      icon: <SolicitationIcon />,
+    },
     ...(role !== "CLIENTE"
       ? [{ path: "/assets", label: "Patrimônio", icon: <AssetIcon /> }]
       : []),
@@ -53,6 +59,9 @@ export function navItemsFor(role: SessionUser["role"]): NavItem[] {
 }
 
 function sectionOf(path: string): string {
+  if (path.startsWith("/solicitations")) {
+    return "/solicitations";
+  }
   if (path.startsWith("/assets")) {
     return "/assets";
   }
