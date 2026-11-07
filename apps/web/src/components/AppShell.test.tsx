@@ -99,7 +99,10 @@ describe("AppShell menu", () => {
     stubSession("CLIENTE");
     await mountShell("/");
 
-    expect(navLinks().map((link) => link.textContent)).toEqual(["Início"]);
+    expect(navLinks().map((link) => link.textContent)).toEqual([
+      "Início",
+      "Solicitações",
+    ]);
   });
 
   it("expands when the mouse comes near and closes after it leaves", async () => {
@@ -209,9 +212,9 @@ describe("Início", () => {
   });
 
   it.each([
-    ["GESTOR", ["Patrimônio", "Usuários"]],
-    ["MANUTENTOR", ["Patrimônio"]],
-    ["CLIENTE", []],
+    ["GESTOR", ["Solicitações", "Patrimônio", "Usuários"]],
+    ["MANUTENTOR", ["Solicitações", "Patrimônio"]],
+    ["CLIENTE", ["Solicitações"]],
   ])("shows the shortcuts of a %s", async (role, expected) => {
     await mountHome(role);
 

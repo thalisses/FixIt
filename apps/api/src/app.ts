@@ -1,6 +1,8 @@
 import express, { type ErrorRequestHandler, type Express } from "express";
 import type { AssetRepository } from "./repositories/assetRepository.js";
+import type { SolicitationRepository } from "./repositories/solicitationRepository.js";
 import { createAssetRoutes } from "./routes/assetRoutes.js";
+import { createSolicitationRoutes } from "./routes/solicitationRoutes.js";
 import {
   createHealthRoutes,
   type DatabaseHealthCheck,
@@ -10,6 +12,7 @@ import { createUserManagementRoutes } from "./routes/userManagementRoutes.js";
 import type { StatusHistoryRepository } from "./repositories/statusHistoryRepository.js";
 import { createStatusHistoryRoutes } from "./routes/statusHistoryRoutes.js";
 import { createAssetService } from "./services/assetService.js";
+import { createSolicitationService } from "./services/solicitationService.js";
 import { createStatusHistoryService } from "./services/statusHistoryService.js";
 import {
   createUserService,
@@ -35,6 +38,7 @@ export function createApp(
   options: { secureCookies: boolean; webOrigin: string },
   assetRepository?: AssetRepository,
   statusHistoryRepository?: StatusHistoryRepository,
+  solicitationRepository?: SolicitationRepository,
 ): Express {
   const app = express();
 
@@ -73,6 +77,14 @@ export function createApp(
         createStatusHistoryService(statusHistoryRepository),
         sessionService,
         options.webOrigin,
+      ),
+    );
+  }
+  if (solicitationRepository) {
+    app.use(
+      createSolicitationRoutes(
+        createSolicitationService(solicitationRepository),
+        sessionService,
       ),
     );
   }

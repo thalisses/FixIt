@@ -40,6 +40,15 @@ export function AssetIcon() {
   );
 }
 
+export function SolicitationIcon() {
+  return (
+    <Icon>
+      <path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1Z" />
+      <path d="M9 7h6M9 11h6M9 15h4" />
+    </Icon>
+  );
+}
+
 export function UsersIcon() {
   return (
     <Icon>

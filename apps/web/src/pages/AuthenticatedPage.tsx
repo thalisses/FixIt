@@ -1,6 +1,10 @@
 import type { MouseEvent, ReactNode } from "react";
 import { AppShell } from "../components/AppShell";
-import { AssetIcon, UsersIcon } from "../components/icons";
+import {
+  AssetIcon,
+  SolicitationIcon,
+  UsersIcon,
+} from "../components/icons";
 import { useAuth } from "../context/AuthContext";
 import type { SessionUser } from "../lib/authApi";
 
@@ -24,6 +28,12 @@ const roleLabels: Record<SessionUser["role"], string> = {
 
 function shortcutsFor(role: SessionUser["role"]): Shortcut[] {
   return [
+    {
+      path: "/solicitations",
+      title: "Solicitações",
+      description: "Acompanhe a fila e consulte os chamados da instituição.",
+      icon: <SolicitationIcon />,
+    },
     ...(role !== "CLIENTE"
       ? [
           {
