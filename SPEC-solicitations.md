@@ -6,6 +6,18 @@
 `DESIGN.md`; protótipo Stitch (`imagens_stitch/screen2.png`, `screen3.png`,
 `screen5.png`, `screen6.png`).
 
+## Status de implementação
+
+| História | Status |
+|---|---|
+| US013 — listagem e filtros | Concluída no PR #10 |
+| US014 — mudança de status | Em implementação nesta branch |
+| US015 — prioridade | Pendente |
+| US016 — atribuição de responsável | Pendente |
+| US012 — cancelamento | Pendente |
+| US019 — triagem | Pendente |
+| US021 — filtros do relatório | Pendente (depende da US020) |
+
 ## Objetivo
 
 Transformar a lista de solicitações em uma fila de trabalho operacional. O

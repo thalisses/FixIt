@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import type { Server } from "node:http";
+import type { EntityManager } from "typeorm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import { Asset, EstadoConservacao } from "../entities/Asset.js";
@@ -140,6 +141,17 @@ function createFakeRepository(
     async list(filters, scope) {
       calls.push({ filters, scope });
       return { solicitations, totalItems };
+    },
+    async findById(id) {
+      return solicitations.find((candidate) => candidate.id === id) ?? null;
+    },
+    async transaction(work) {
+      return work({
+        manager: {} as EntityManager,
+        findByIdForUpdate: async (id) =>
+          solicitations.find((candidate) => candidate.id === id) ?? null,
+        save: async (solicitation) => solicitation,
+      });
     },
   };
 }

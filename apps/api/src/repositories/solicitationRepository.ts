@@ -1,4 +1,4 @@
-import type { DataSource } from "typeorm";
+import type { DataSource, EntityManager } from "typeorm";
 import {
   Solicitation,
   type AreaTecnica,
@@ -30,11 +30,23 @@ export interface SolicitationListResult {
   totalItems: number;
 }
 
+export interface SolicitationTransaction {
+  manager: EntityManager;
+  findByIdForUpdate(id: number): Promise<Solicitation | null>;
+  save(solicitation: Solicitation): Promise<Solicitation>;
+}
+
 export interface SolicitationRepository {
   list(
     filters: SolicitationListFilters,
     scope: SolicitationListScope,
   ): Promise<SolicitationListResult>;
+  /** Detalhe com solicitante, responsável e bem carregados. */
+  findById(id: number): Promise<Solicitation | null>;
+  /** Transação com lock pessimista para mudanças de estado. */
+  transaction<T>(
+    work: (transaction: SolicitationTransaction) => Promise<T>,
+  ): Promise<T>;
 }
 
 function escapeLike(term: string): string {
@@ -120,6 +132,29 @@ export function createSolicitationRepository(
         .getManyAndCount();
 
       return { solicitations, totalItems };
+    },
+
+    findById(id) {
+      return dataSource.getRepository(Solicitation).findOne({
+        where: { id },
+        relations: { solicitante: true, responsavel: true, bem: true },
+      });
+    },
+
+    transaction(work) {
+      return dataSource.transaction((manager) => {
+        const repository = manager.getRepository(Solicitation);
+        const transaction: SolicitationTransaction = {
+          manager,
+          findByIdForUpdate: (id) =>
+            repository.findOne({
+              where: { id },
+              lock: { mode: "pessimistic_write" },
+            }),
+          save: (solicitation) => repository.save(solicitation),
+        };
+        return work(transaction);
+      });
     },
   };
 }

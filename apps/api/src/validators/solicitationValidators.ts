@@ -66,3 +66,10 @@ export const solicitationListQuerySchema = z
   });
 
 export type SolicitationListQuery = z.infer<typeof solicitationListQuerySchema>;
+
+export const changeSolicitationStatusSchema = z.object(
+  {
+    status: z.enum(StatusSolicitacao, { error: "Status inválido." }),
+  },
+  { error: "Dados da mudança de status inválidos." },
+);

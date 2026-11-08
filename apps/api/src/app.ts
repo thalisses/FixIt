@@ -71,10 +71,13 @@ export function createApp(
       ),
     );
   }
-  if (statusHistoryRepository) {
+  const statusHistoryService = statusHistoryRepository
+    ? createStatusHistoryService(statusHistoryRepository)
+    : undefined;
+  if (statusHistoryService) {
     app.use(
       createStatusHistoryRoutes(
-        createStatusHistoryService(statusHistoryRepository),
+        statusHistoryService,
         sessionService,
         options.webOrigin,
       ),
@@ -83,8 +86,10 @@ export function createApp(
   if (solicitationRepository) {
     app.use(
       createSolicitationRoutes(
-        createSolicitationService(solicitationRepository),
+        createSolicitationService(solicitationRepository, statusHistoryService),
         sessionService,
+        options.webOrigin,
+        Boolean(statusHistoryService),
       ),
     );
   }
