@@ -1,5 +1,6 @@
 import { isAuthorized } from "../auth/authorization.js";
 import {
+  NivelPrioridade,
   Solicitation,
   StatusSolicitacao,
 } from "../entities/Solicitation.js";
@@ -48,6 +49,11 @@ export interface SolicitationService {
   changeStatus(
     id: number,
     status: StatusSolicitacao,
+    user: Pick<PublicSessionUser, "id" | "role">,
+  ): Promise<Solicitation>;
+  changePriority(
+    id: number,
+    prioridade: NivelPrioridade,
     user: Pick<PublicSessionUser, "id" | "role">,
   ): Promise<Solicitation>;
 }
@@ -99,6 +105,23 @@ export function createSolicitationService(
         throw new ForbiddenSolicitationError();
       }
       return solicitation;
+    },
+
+    async changePriority(id, prioridade, user) {
+      if (!isAuthorized(user, "request:manage")) {
+        throw new ForbiddenSolicitationError();
+      }
+
+      const updated = await repository.updatePriority(id, prioridade);
+      if (!updated) {
+        throw new SolicitationNotFoundError();
+      }
+
+      const withRelations = await repository.findById(id);
+      if (!withRelations) {
+        throw new SolicitationNotFoundError();
+      }
+      return withRelations;
     },
 
     async changeStatus(id, status, user) {

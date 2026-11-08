@@ -43,6 +43,11 @@ export interface SolicitationRepository {
   ): Promise<SolicitationListResult>;
   /** Detalhe com solicitante, responsável e bem carregados. */
   findById(id: number): Promise<Solicitation | null>;
+  /** Atualiza só a prioridade; devolve null se a solicitação não existir. */
+  updatePriority(
+    id: number,
+    prioridade: NivelPrioridade,
+  ): Promise<Solicitation | null>;
   /** Transação com lock pessimista para mudanças de estado. */
   transaction<T>(
     work: (transaction: SolicitationTransaction) => Promise<T>,
@@ -139,6 +144,17 @@ export function createSolicitationRepository(
         where: { id },
         relations: { solicitante: true, responsavel: true, bem: true },
       });
+    },
+
+    async updatePriority(id, prioridade) {
+      const repository = dataSource.getRepository(Solicitation);
+      const solicitation = await repository.findOneBy({ id });
+      if (!solicitation) {
+        return null;
+      }
+
+      solicitation.prioridade = prioridade;
+      return repository.save(solicitation);
     },
 
     transaction(work) {

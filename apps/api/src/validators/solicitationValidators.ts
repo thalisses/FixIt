@@ -73,3 +73,10 @@ export const changeSolicitationStatusSchema = z.object(
   },
   { error: "Dados da mudança de status inválidos." },
 );
+
+export const changeSolicitationPrioritySchema = z.object(
+  {
+    prioridade: z.enum(NivelPrioridade, { error: "Prioridade inválida." }),
+  },
+  { error: "Dados da prioridade inválidos." },
+);
