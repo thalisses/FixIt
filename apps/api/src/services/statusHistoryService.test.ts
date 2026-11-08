@@ -2,6 +2,7 @@ import type { EntityManager } from "typeorm";
 import { describe, expect, it } from "vitest";
 import { StatusSolicitacao } from "../entities/Solicitation.js";
 import { StatusHistory, TipoRegistro } from "../entities/StatusHistory.js";
+import { UserRole } from "../entities/User.js";
 import type {
   NewStatusHistory,
   SolicitationState,
@@ -9,14 +10,26 @@ import type {
 } from "../repositories/statusHistoryRepository.js";
 import {
   createStatusHistoryService,
+  HistoryAccessDeniedError,
   InvalidStatusHistoryError,
   NotResponsibleError,
   SolicitationClosedError,
   SolicitationNotFoundError,
 } from "./statusHistoryService.js";
 
+const gestor = { id: "user-9", role: UserRole.GESTOR };
+
+function assignedTo(responsavelId: string): Record<number, SolicitationState> {
+  return {
+    7: {
+      solicitanteId: "user-3",
+      responsavelId,
+      status: StatusSolicitacao.EM_ATENDIMENTO,
+    },
+  };
+}
+
 function createFakeRepository(
-  existingSolicitations: number[] = [],
   states: Record<number, SolicitationState> = {},
 ) {
   const saved: { entry: NewStatusHistory; manager?: EntityManager }[] = [];
@@ -28,9 +41,6 @@ function createFakeRepository(
         id: saved.length,
         dataHora: new Date(),
       });
-    },
-    async solicitationExists(solicitacaoId) {
-      return existingSolicitations.includes(solicitacaoId);
     },
     async findSolicitationState(solicitacaoId) {
       return states[solicitacaoId] ?? null;
@@ -148,11 +158,14 @@ describe("status history service", () => {
   });
 
   it("lists the records of an existing solicitation", async () => {
-    const { repository } = createFakeRepository([author.solicitacaoId]);
+    const { repository } = createFakeRepository(assignedTo("user-2"));
     const service = createStatusHistoryService(repository);
     await service.recordOpening(author);
 
-    const history = await service.listBySolicitation(author.solicitacaoId);
+    const history = await service.listBySolicitation(
+      author.solicitacaoId,
+      gestor,
+    );
 
     expect(history?.map(({ tipo }) => tipo)).toEqual([TipoRegistro.ABERTURA]);
   });
@@ -161,19 +174,46 @@ describe("status history service", () => {
     const { repository, listed } = createFakeRepository();
 
     await expect(
-      createStatusHistoryService(repository).listBySolicitation(99),
+      createStatusHistoryService(repository).listBySolicitation(99, gestor),
     ).resolves.toBeNull();
+    expect(listed).toHaveLength(0);
+  });
+
+  it("lists the records for the Manutentor in charge", async () => {
+    const { repository, listed } = createFakeRepository(assignedTo("user-2"));
+
+    await createStatusHistoryService(repository).listBySolicitation(
+      author.solicitacaoId,
+      { id: "user-2", role: UserRole.MANUTENTOR },
+    );
+
+    expect(listed).toEqual([author.solicitacaoId]);
+  });
+
+  it("refuses a Manutentor who is not in charge without reading", async () => {
+    const { repository, listed } = createFakeRepository(assignedTo("user-2"));
+
+    await expect(
+      createStatusHistoryService(repository).listBySolicitation(
+        author.solicitacaoId,
+        { id: "user-9", role: UserRole.MANUTENTOR },
+      ),
+    ).rejects.toBeInstanceOf(HistoryAccessDeniedError);
     expect(listed).toHaveLength(0);
   });
 });
 
 describe("observations added through the route (US017)", () => {
   const inService = (responsavelId: string | null) => ({
-    7: { responsavelId, status: StatusSolicitacao.EM_ATENDIMENTO },
+    7: {
+      solicitanteId: "user-3",
+      responsavelId,
+      status: StatusSolicitacao.EM_ATENDIMENTO,
+    },
   });
 
   it("records the observation of the person in charge (CA1)", async () => {
-    const { repository, saved } = createFakeRepository([], inService("user-1"));
+    const { repository, saved } = createFakeRepository(inService("user-1"));
 
     await createStatusHistoryService(repository).addObservation({
       ...author,
@@ -190,7 +230,7 @@ describe("observations added through the route (US017)", () => {
   });
 
   it("adds a new record without touching the previous ones (CA2)", async () => {
-    const { repository, saved } = createFakeRepository([], inService("user-1"));
+    const { repository, saved } = createFakeRepository(inService("user-1"));
     const service = createStatusHistoryService(repository);
 
     await service.addObservation({ ...author, descricao: "Primeira" });
@@ -207,7 +247,6 @@ describe("observations added through the route (US017)", () => {
     ["nobody is in charge yet", null],
   ])("refuses when %s and saves nothing", async (_case, responsavelId) => {
     const { repository, saved } = createFakeRepository(
-      [],
       inService(responsavelId),
     );
 
@@ -223,8 +262,8 @@ describe("observations added through the route (US017)", () => {
   it.each([StatusSolicitacao.CONCLUIDO, StatusSolicitacao.CANCELADA])(
     "refuses a solicitation that is %s",
     async (status) => {
-      const { repository, saved } = createFakeRepository([], {
-        7: { responsavelId: "user-1", status },
+      const { repository, saved } = createFakeRepository({
+        7: { solicitanteId: "user-3", responsavelId: "user-1", status },
       });
 
       await expect(

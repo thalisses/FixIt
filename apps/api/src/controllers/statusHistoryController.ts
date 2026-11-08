@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { StatusHistory } from "../entities/StatusHistory.js";
 import {
+  HistoryAccessDeniedError,
   NotResponsibleError,
   SolicitationClosedError,
   SolicitationNotFoundError,
@@ -71,8 +72,17 @@ export function createStatusHistoryController(service: StatusHistoryService) {
         return;
       }
 
+      const viewer = request.authUser;
+      if (!viewer) {
+        next(new Error("Authenticated user missing on a protected route."));
+        return;
+      }
+
       try {
-        const history = await service.listBySolicitation(parsed.data.id);
+        const history = await service.listBySolicitation(
+          parsed.data.id,
+          viewer,
+        );
         if (!history) {
           sendSolicitationNotFound(response);
           return;
@@ -80,6 +90,12 @@ export function createStatusHistoryController(service: StatusHistoryService) {
 
         response.status(200).json({ data: history.map(toHistoryEntry) });
       } catch (error) {
+        if (error instanceof HistoryAccessDeniedError) {
+          response.status(403).json({
+            error: { code: "FORBIDDEN", message: error.message },
+          });
+          return;
+        }
         next(error);
       }
     },

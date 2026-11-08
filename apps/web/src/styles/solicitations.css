@@ -293,3 +293,119 @@
     flex-direction: column;
   }
 }
+
+.solicitation-timeline {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.solicitation-timeline-item {
+  position: relative;
+  margin-left: 5px;
+  padding: 0 0 20px 20px;
+  border-left: 2px solid #e2e8f0;
+}
+
+.solicitation-timeline-item:last-child {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.solicitation-timeline-item::before {
+  position: absolute;
+  top: 3px;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1e3a8a;
+  content: "";
+}
+
+.solicitation-timeline-item[data-tipo="OBSERVACAO"]::before {
+  background: #64748b;
+}
+
+.solicitation-timeline-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: #0b1c30;
+  font-size: 14px;
+}
+
+.solicitation-timeline-heading time,
+.solicitation-timeline-author {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.solicitation-timeline-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.solicitation-timeline-item .solicitation-description {
+  margin-top: 8px;
+}
+
+.solicitation-timeline-author {
+  margin: 6px 0 0;
+}
+
+.solicitation-observation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.solicitation-observation-form textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid #c5c5d3;
+  border-radius: 4px;
+  outline: none;
+  background: #eff4ff;
+  color: #0b1c30;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  resize: vertical;
+}
+
+.solicitation-observation-form textarea:focus {
+  border-color: #0051d5;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(0 81 213 / 16%);
+}
+
+.solicitation-observation-form textarea[aria-invalid="true"] {
+  border-color: #ba1a1a;
+}
+
+.solicitation-observation-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.solicitation-observation-form .solicitation-action-button {
+  align-self: flex-end;
+}
+
+@media (max-width: 640px) {
+  .solicitation-observation-form .solicitation-action-button {
+    align-self: stretch;
+  }
+}
