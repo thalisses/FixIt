@@ -145,6 +145,14 @@ function createFakeRepository(
     async findById(id) {
       return solicitations.find((candidate) => candidate.id === id) ?? null;
     },
+    async updatePriority(id, prioridade) {
+      const found = solicitations.find((candidate) => candidate.id === id);
+      if (!found) {
+        return null;
+      }
+      found.prioridade = prioridade;
+      return found;
+    },
     async transaction(work) {
       return work({
         manager: {} as EntityManager,

@@ -99,6 +99,24 @@ export async function changeSolicitationStatus(
   return readDetail(body);
 }
 
+export async function changeSolicitationPriority(
+  id: number,
+  prioridade: NivelPrioridade,
+): Promise<SolicitationDetail> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/priority`,
+    "Não foi possível alterar a prioridade da solicitação.",
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ prioridade }),
+    },
+  );
+
+  return readDetail(body);
+}
+
 export async function listSolicitations(
   filters: SolicitationFilters = {},
 ): Promise<SolicitationPage> {

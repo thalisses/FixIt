@@ -11,8 +11,8 @@
 | História | Status |
 |---|---|
 | US013 — listagem e filtros | Concluída no PR #10 |
-| US014 — mudança de status | Em implementação nesta branch |
-| US015 — prioridade | Pendente |
+| US014 — mudança de status | Concluída no PR #11 |
+| US015 — prioridade | Em implementação nesta branch |
 | US016 — atribuição de responsável | Pendente |
 | US012 — cancelamento | Pendente |
 | US019 — triagem | Pendente |

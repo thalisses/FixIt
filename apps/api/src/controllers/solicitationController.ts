@@ -9,6 +9,7 @@ import {
 import { SolicitationNotFoundError } from "../services/statusHistoryService.js";
 import { idParamSchema } from "../validators/idParamSchema.js";
 import {
+  changeSolicitationPrioritySchema,
   changeSolicitationStatusSchema,
   solicitationListQuerySchema,
 } from "../validators/solicitationValidators.js";
@@ -250,6 +251,60 @@ export function createSolicitationController(service: SolicitationService) {
         }
         if (error instanceof InvalidStatusTransitionError) {
           sendInvalidTransition(response);
+          return;
+        }
+        next(error);
+      }
+    },
+
+    async changePriority(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const id = idParamSchema.safeParse(request.params);
+      if (!id.success) {
+        sendValidationError(response, id.error, "Identificador inválido.");
+        return;
+      }
+
+      const body = changeSolicitationPrioritySchema.safeParse(request.body);
+      if (!body.success) {
+        sendValidationError(
+          response,
+          body.error,
+          "Dados da prioridade inválidos.",
+        );
+        return;
+      }
+
+      const user = request.authUser;
+      if (!user) {
+        response.status(401).json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Autenticação necessária.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const solicitation = await service.changePriority(
+          id.data.id,
+          body.data.prioridade,
+          user,
+        );
+        response
+          .status(200)
+          .json({ data: { solicitation: toDetail(solicitation) } });
+      } catch (error) {
+        if (error instanceof SolicitationNotFoundError) {
+          sendNotFound(response);
+          return;
+        }
+        if (error instanceof ForbiddenSolicitationError) {
+          sendForbidden(response);
           return;
         }
         next(error);
