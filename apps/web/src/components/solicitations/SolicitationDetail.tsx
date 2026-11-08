@@ -22,6 +22,7 @@ import {
   PriorityBadge,
   UrgencyBadge,
 } from "./solicitationPresentation";
+import { SolicitationTimeline } from "./SolicitationTimeline";
 
 interface SolicitationDetailProps {
   id: number;
@@ -388,6 +389,12 @@ export function SolicitationDetail({
               )}
             </div>
           )}
+
+          <SolicitationTimeline
+            responsavelId={solicitation.responsavel?.id ?? null}
+            solicitationId={id}
+            status={solicitation.status}
+          />
         </>
       )}
     </section>

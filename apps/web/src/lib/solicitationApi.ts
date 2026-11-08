@@ -34,6 +34,23 @@ export interface SolicitationDetail extends SolicitationListItem {
   observacoes: string | null;
 }
 
+export type TipoRegistro =
+  | "ABERTURA"
+  | "MUDANCA_STATUS"
+  | "ATRIBUICAO"
+  | "OBSERVACAO"
+  | "CANCELAMENTO";
+
+export interface SolicitationHistoryEntry {
+  id: number;
+  tipo: TipoRegistro;
+  statusAnterior: StatusSolicitacao | null;
+  statusNovo: StatusSolicitacao | null;
+  descricao: string | null;
+  dataHora: string;
+  autor: SolicitationUser;
+}
+
 export interface SolicitationFilters {
   status?: StatusSolicitacao | "";
   setor?: string;
@@ -169,6 +186,47 @@ export async function listSolicitations(
   };
 }
 
+export async function listSolicitationHistory(
+  id: number,
+): Promise<SolicitationHistoryEntry[]> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/history`,
+    "Não foi possível carregar o histórico da solicitação.",
+  );
+
+  if (
+    !isRecord(body) ||
+    !Array.isArray(body.data) ||
+    !body.data.every(isHistoryEntry)
+  ) {
+    throw invalidResponse();
+  }
+  return body.data;
+}
+
+export async function addSolicitationObservation(
+  id: number,
+  descricao: string,
+): Promise<SolicitationHistoryEntry> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/observations`,
+    "Não foi possível registrar a observação.",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ descricao }),
+    },
+  );
+
+  const observation =
+    isRecord(body) && isRecord(body.data) ? body.data.observation : null;
+  if (!isHistoryEntry(observation)) {
+    throw invalidResponse();
+  }
+  return observation;
+}
+
 async function request(
   url: string,
   fallbackMessage: string,
@@ -252,6 +310,20 @@ function isSolicitationListItem(
     (isSolicitationUser(value.solicitante) || value.solicitante === null) &&
     (isSolicitationUser(value.responsavel) || value.responsavel === null) &&
     (isSolicitationAsset(value.bem) || value.bem === null)
+  );
+}
+
+function isHistoryEntry(value: unknown): value is SolicitationHistoryEntry {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.tipo === "string" &&
+    (typeof value.statusAnterior === "string" ||
+      value.statusAnterior === null) &&
+    (typeof value.statusNovo === "string" || value.statusNovo === null) &&
+    (typeof value.descricao === "string" || value.descricao === null) &&
+    typeof value.dataHora === "string" &&
+    isSolicitationUser(value.autor)
   );
 }
 

@@ -74,6 +74,9 @@ function stubBackend({
         data: { solicitation: priorityPatch ? priorityPatch(body) : request },
       });
     }
+    if (url === "/api/solicitations/1/history") {
+      return jsonResponse({ data: [] });
+    }
     if (url === "/api/solicitations/1") {
       return jsonResponse({ data: { solicitation: request } });
     }
