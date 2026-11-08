@@ -21,6 +21,16 @@ export function formatProtocol(solicitation: SolicitationListItem): string {
   return `#CH-${year}-${String(solicitation.id).padStart(4, "0")}`;
 }
 
+const dateTimeInBrasilia = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
+export function formatDateTime(timestamp: string): string {
+  return dateTimeInBrasilia.format(new Date(timestamp));
+}
+
 export function UrgencyBadge({ urgency }: { urgency: NivelUrgencia }) {
   return (
     <span

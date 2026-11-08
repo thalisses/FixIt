@@ -29,6 +29,11 @@ export interface SolicitationListItem {
   bem: SolicitationAsset | null;
 }
 
+export interface SolicitationDetail extends SolicitationListItem {
+  descricaoProblema: string;
+  observacoes: string | null;
+}
+
 export interface SolicitationFilters {
   status?: StatusSolicitacao | "";
   setor?: string;
@@ -63,6 +68,35 @@ export class SolicitationApiError extends Error {
     super(message);
     this.name = "SolicitationApiError";
   }
+}
+
+export async function getSolicitation(
+  id: number,
+): Promise<SolicitationDetail> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}`,
+    "Não foi possível carregar a solicitação.",
+  );
+
+  return readDetail(body);
+}
+
+export async function changeSolicitationStatus(
+  id: number,
+  status: StatusSolicitacao,
+): Promise<SolicitationDetail> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/status`,
+    "Não foi possível alterar o status da solicitação.",
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ status }),
+    },
+  );
+
+  return readDetail(body);
 }
 
 export async function listSolicitations(
@@ -117,8 +151,12 @@ export async function listSolicitations(
   };
 }
 
-async function request(url: string, fallbackMessage: string): Promise<unknown> {
-  const response = await fetch(url, { credentials: "same-origin" });
+async function request(
+  url: string,
+  fallbackMessage: string,
+  init: RequestInit = { credentials: "same-origin" },
+): Promise<unknown> {
+  const response = await fetch(url, init);
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -135,6 +173,28 @@ async function request(url: string, fallbackMessage: string): Promise<unknown> {
     throw invalidResponse();
   }
   return body;
+}
+
+function readDetail(body: unknown): SolicitationDetail {
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw invalidResponse();
+  }
+  const solicitation = body.data.solicitation;
+  if (!isSolicitationDetail(solicitation)) {
+    throw invalidResponse();
+  }
+  return solicitation;
+}
+
+function isSolicitationDetail(
+  value: unknown,
+): value is SolicitationDetail {
+  return (
+    isRecord(value) &&
+    typeof value.descricaoProblema === "string" &&
+    (typeof value.observacoes === "string" || value.observacoes === null) &&
+    isSolicitationListItem(value)
+  );
 }
 
 function readFields(value: unknown): SolicitationFieldErrors {

@@ -15,7 +15,7 @@ function isAssetPath(path: string): boolean {
 
 /** Endereços que cada cargo pode abrir depois do login. */
 function canOpen(role: string, path: string): boolean {
-  if (path === "/" || path === "/solicitations") {
+  if (path === "/" || path.startsWith("/solicitations")) {
     return true;
   }
   if (path === "/users") {
@@ -112,11 +112,12 @@ function AppContent() {
       );
     }
 
-    if (currentPath === "/solicitations") {
+    if (currentPath.startsWith("/solicitations")) {
       return (
         <SolicitationsPage
           onLoggedOut={() => navigate("/login")}
           onNavigate={navigate}
+          path={currentPath}
         />
       );
     }
@@ -131,7 +132,7 @@ function AppContent() {
 
   return currentPath === "/login" ||
     currentPath === "/users" ||
-    currentPath === "/solicitations" ||
+    currentPath.startsWith("/solicitations") ||
     isAssetPath(currentPath) ? (
     <LoginPage />
   ) : (
