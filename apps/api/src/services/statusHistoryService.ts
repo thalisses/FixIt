@@ -1,7 +1,9 @@
 import type { EntityManager } from "typeorm";
+import { isAuthorized } from "../auth/authorization.js";
 import { StatusSolicitacao } from "../entities/Solicitation.js";
 import { TipoRegistro, type StatusHistory } from "../entities/StatusHistory.js";
 import type { StatusHistoryRepository } from "../repositories/statusHistoryRepository.js";
+import type { PublicSessionUser } from "./sessionService.js";
 
 export class InvalidStatusHistoryError extends Error {
   constructor(message: string) {
@@ -14,6 +16,13 @@ export class SolicitationNotFoundError extends Error {
   constructor() {
     super("Solicitação não encontrada.");
     this.name = "SolicitationNotFoundError";
+  }
+}
+
+export class HistoryAccessDeniedError extends Error {
+  constructor() {
+    super("Você não tem permissão para acessar esta solicitação.");
+    this.name = "HistoryAccessDeniedError";
   }
 }
 
@@ -69,8 +78,14 @@ export interface StatusHistoryService {
    * enquanto a solicitação não foi encerrada. Nada é sobrescrito.
    */
   addObservation(entry: Observation): Promise<StatusHistory>;
-  /** Devolve null quando a solicitação não existe. */
-  listBySolicitation(solicitacaoId: number): Promise<StatusHistory[] | null>;
+  /**
+   * Devolve null quando a solicitação não existe. Segue a mesma regra de
+   * leitura da solicitação: o Manutentor só vê as que estão com ele.
+   */
+  listBySolicitation(
+    solicitacaoId: number,
+    viewer: Pick<PublicSessionUser, "id" | "role">,
+  ): Promise<StatusHistory[] | null>;
 }
 
 export function createStatusHistoryService(
@@ -148,9 +163,18 @@ export function createStatusHistoryService(
       return service.recordObservation(entry);
     },
 
-    async listBySolicitation(solicitacaoId) {
-      if (!(await repository.solicitationExists(solicitacaoId))) {
+    async listBySolicitation(solicitacaoId, viewer) {
+      const state = await repository.findSolicitationState(solicitacaoId);
+      if (!state) {
         return null;
+      }
+
+      const scope = {
+        ownerId: state.solicitanteId,
+        assignedMaintainerId: state.responsavelId,
+      };
+      if (!isAuthorized(viewer, "request:read", scope)) {
+        throw new HistoryAccessDeniedError();
       }
 
       return repository.listBySolicitation(solicitacaoId);

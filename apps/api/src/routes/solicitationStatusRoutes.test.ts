@@ -179,13 +179,14 @@ function createStatusHistoryRepository(
         autor: loggedUser,
       });
     },
-    async solicitationExists(id) {
-      return solicitations.some((candidate) => candidate.id === id);
-    },
     async findSolicitationState(id) {
       const found = solicitations.find((candidate) => candidate.id === id);
       return found
-        ? { responsavelId: found.responsavelId, status: found.status }
+        ? {
+            solicitanteId: found.solicitanteId,
+            responsavelId: found.responsavelId,
+            status: found.status,
+          }
         : null;
     },
     async listBySolicitation() {

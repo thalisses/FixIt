@@ -94,6 +94,12 @@ function entry(id: number, changes: Partial<StatusHistory>): StatusHistory {
   });
 }
 
+const assignedToLoggedUser: SolicitationState = {
+  solicitanteId: "user-3",
+  responsavelId: loggedUser.id,
+  status: StatusSolicitacao.EM_ATENDIMENTO,
+};
+
 const opening = entry(1, {
   tipo: TipoRegistro.ABERTURA,
   statusNovo: StatusSolicitacao.EM_ABERTO,
@@ -130,11 +136,8 @@ function createFakeRepository(
       (histories[entry.solicitacaoId] ??= []).push(created);
       return created;
     },
-    async solicitationExists(id) {
-      return id in histories;
-    },
     async findSolicitationState(id) {
-      return states[id] ?? null;
+      return states[id] ?? (id in histories ? assignedToLoggedUser : null);
     },
     async listBySolicitation(id) {
       listed.push(id);
@@ -185,6 +188,39 @@ describe("GET /api/solicitations/:id/history access", () => {
       expect(response.status).toBe(200);
     },
   );
+
+  it("refuses a Manutentor who is not in charge without reading", async () => {
+    loggedUser.role = UserRole.MANUTENTOR;
+    const repository = createFakeRepository(
+      { 7: timeline },
+      { 7: { ...assignedToLoggedUser, responsavelId: "user-9" } },
+    );
+    const baseUrl = await startServer(repository);
+
+    const response = await getHistory(baseUrl, 7);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "FORBIDDEN",
+        message: "Você não tem permissão para acessar esta solicitação.",
+      },
+    });
+    expect(repository.listed).toHaveLength(0);
+  });
+
+  it("lets a Gestor see a solicitation assigned to someone else", async () => {
+    const baseUrl = await startServer(
+      createFakeRepository(
+        { 7: timeline },
+        { 7: { ...assignedToLoggedUser, responsavelId: "user-9" } },
+      ),
+    );
+
+    const response = await getHistory(baseUrl, 7);
+
+    expect(response.status).toBe(200);
+  });
 
   it("refuses a Cliente without reading the history", async () => {
     loggedUser.role = UserRole.CLIENTE;
@@ -341,7 +377,7 @@ describe("POST /api/solicitations/:id/observations", () => {
   };
 
   function inService(responsavelId: string | null) {
-    return { 7: { responsavelId, status: StatusSolicitacao.EM_ATENDIMENTO } };
+    return { 7: { ...assignedToLoggedUser, responsavelId } };
   }
 
   function postObservation(
@@ -427,7 +463,7 @@ describe("POST /api/solicitations/:id/observations", () => {
   it("refuses a closed solicitation", async () => {
     const repository = createFakeRepository(
       { 7: [opening] },
-      { 7: { responsavelId: "user-1", status: StatusSolicitacao.CONCLUIDO } },
+      { 7: { ...assignedToLoggedUser, status: StatusSolicitacao.CONCLUIDO } },
     );
     const baseUrl = await startServer(repository);
 
