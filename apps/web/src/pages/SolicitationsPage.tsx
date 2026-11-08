@@ -4,6 +4,7 @@ import {
   emptySolicitationFilters,
   SolicitationFiltersForm,
 } from "../components/solicitations/SolicitationFilters";
+import { SolicitationDetail } from "../components/solicitations/SolicitationDetail";
 import { SolicitationList } from "../components/solicitations/SolicitationList";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -17,15 +18,26 @@ import "../styles/solicitations.css";
 const pageSize = 20;
 
 interface SolicitationsPageProps {
+  path?: string;
   onLoggedOut(): void;
   onNavigate(path: string): void;
 }
 
+type SolicitationsRoute = { name: "list" } | { name: "detail"; id: number };
+
+export function parseSolicitationsRoute(path: string): SolicitationsRoute {
+  const match = /^\/solicitations\/(\d+)$/.exec(path);
+  return match ? { name: "detail", id: Number(match[1]) } : { name: "list" };
+}
+
 export function SolicitationsPage({
+  path = "/solicitations",
   onLoggedOut,
   onNavigate,
 }: SolicitationsPageProps) {
   const { user, refresh } = useAuth();
+  const route = parseSolicitationsRoute(path);
+  const detailId = route.name === "detail" ? route.id : null;
   const [filters, setFilters] = useState<SolicitationFilters>(
     emptySolicitationFilters,
   );
@@ -52,6 +64,12 @@ export function SolicitationsPage({
   );
 
   useEffect(() => {
+    if (detailId !== null) {
+      setIsLoading(false);
+      setErrorMessage("");
+      return undefined;
+    }
+
     let isCurrent = true;
     setIsLoading(true);
     setErrorMessage("");
@@ -85,7 +103,7 @@ export function SolicitationsPage({
     return () => {
       isCurrent = false;
     };
-  }, [filters, page, reloadCount, handleRequestError]);
+  }, [detailId, filters, page, reloadCount, handleRequestError]);
 
   if (!user) {
     return null;
@@ -112,9 +130,24 @@ export function SolicitationsPage({
     setPage(1);
   }
 
+  if (route.name === "detail") {
+    return (
+      <AppShell
+        activePath={path}
+        onLoggedOut={onLoggedOut}
+        onNavigate={onNavigate}
+      >
+        <SolicitationDetail
+          id={route.id}
+          onBack={() => onNavigate("/solicitations")}
+        />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell
-      activePath="/solicitations"
+      activePath={path}
       onLoggedOut={onLoggedOut}
       onNavigate={onNavigate}
     >
@@ -179,7 +212,10 @@ export function SolicitationsPage({
           </div>
         ) : (
           <>
-            <SolicitationList solicitations={solicitations} />
+            <SolicitationList
+              onOpen={(id) => onNavigate(`/solicitations/${id}`)}
+              solicitations={solicitations}
+            />
 
             <nav
               aria-label="Paginação das solicitações"

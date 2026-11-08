@@ -188,3 +188,89 @@
     text-align: right;
   }
 }
+
+.solicitation-detail-subtitle {
+  margin: 4px 0 0;
+  color: #444651;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.solicitation-description {
+  margin: 0;
+  color: #0b1c30;
+  font-size: 15px;
+  line-height: 24px;
+  white-space: pre-wrap;
+}
+
+.solicitation-description + h2 {
+  margin-top: 24px;
+}
+
+.solicitation-asset-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.solicitation-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.solicitation-action-card h2 {
+  margin-bottom: 4px;
+}
+
+.primary-action.solicitation-action-button {
+  width: auto;
+  min-height: 40px;
+  flex-shrink: 0;
+  padding-inline: 20px;
+  font-size: 14px;
+}
+
+.solicitation-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.solicitation-confirmation p {
+  width: 100%;
+  margin: 0;
+  color: #444651;
+  font-size: 14px;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .solicitation-action-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-action.solicitation-action-button {
+    width: 100%;
+  }
+
+  .solicitation-confirmation {
+    justify-content: stretch;
+  }
+
+  .solicitation-confirmation p {
+    text-align: left;
+  }
+
+  .solicitation-confirmation .text-action,
+  .solicitation-confirmation .primary-action {
+    width: 100%;
+  }
+}

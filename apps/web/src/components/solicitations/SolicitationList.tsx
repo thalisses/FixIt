@@ -12,9 +12,13 @@ import {
 
 interface SolicitationListProps {
   solicitations: SolicitationListItem[];
+  onOpen(id: number): void;
 }
 
-export function SolicitationList({ solicitations }: SolicitationListProps) {
+export function SolicitationList({
+  solicitations,
+  onOpen,
+}: SolicitationListProps) {
   return (
     <div className="asset-table-card">
       <table className="asset-table solicitation-table">
@@ -28,6 +32,9 @@ export function SolicitationList({ solicitations }: SolicitationListProps) {
             <th scope="col">Prioridade</th>
             <th scope="col">Responsável</th>
             <th scope="col">Status</th>
+            <th scope="col">
+              <span className="asset-visually-hidden">Ações</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -83,6 +90,16 @@ export function SolicitationList({ solicitations }: SolicitationListProps) {
               </td>
               <td data-label="Status">
                 <StatusBadge status={solicitation.status} />
+              </td>
+              <td className="asset-table-action">
+                <button
+                  aria-label={`Abrir solicitação ${formatProtocol(solicitation)}`}
+                  className="text-action"
+                  onClick={() => onOpen(solicitation.id)}
+                  type="button"
+                >
+                  Abrir
+                </button>
               </td>
             </tr>
           ))}

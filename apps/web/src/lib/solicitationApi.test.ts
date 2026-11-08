@@ -1,9 +1,31 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  changeSolicitationStatus,
+  getSolicitation,
   listSolicitations,
   SolicitationApiError,
+  type SolicitationDetail,
   type SolicitationListItem,
 } from "./solicitationApi";
+
+const detail: SolicitationDetail = {
+  ...({
+    id: 1,
+    data: "2026-11-07T12:00:00.000Z",
+    local: "Bloco C",
+    tipoProblema: "INFORMATICA",
+    setorResponsavel: "TI",
+    urgencia: "ALTA",
+    prioridade: "MEDIA",
+    status: "EM_ABERTO",
+    dataConclusao: null,
+    solicitante: { id: "user-1", fullName: "Ana" },
+    responsavel: null,
+    bem: null,
+  } satisfies SolicitationListItem),
+  descricaoProblema: "Projetor não liga",
+  observacoes: null,
+};
 
 const item: SolicitationListItem = {
   id: 1,
@@ -123,5 +145,43 @@ describe("listSolicitations", () => {
     await expect(listSolicitations()).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
+  });
+});
+
+
+describe("getSolicitation", () => {
+  it("loads one request by id", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: { solicitation: detail } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getSolicitation(1);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/solicitations/1", {
+      credentials: "same-origin",
+    });
+    expect(result).toEqual(detail);
+  });
+});
+
+describe("changeSolicitationStatus", () => {
+  it("sends the new status with PATCH", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        data: { solicitation: { ...detail, status: "EM_ATENDIMENTO" } },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await changeSolicitationStatus(1, "EM_ATENDIMENTO");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/solicitations/1/status", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ status: "EM_ATENDIMENTO" }),
+    });
+    expect(result.status).toBe("EM_ATENDIMENTO");
   });
 });
