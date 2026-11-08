@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  changeSolicitationPriority,
   changeSolicitationStatus,
   getSolicitation,
   listSolicitations,
@@ -183,5 +184,27 @@ describe("changeSolicitationStatus", () => {
       body: JSON.stringify({ status: "EM_ATENDIMENTO" }),
     });
     expect(result.status).toBe("EM_ATENDIMENTO");
+  });
+});
+
+
+describe("changeSolicitationPriority", () => {
+  it("sends the new priority with PATCH", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        data: { solicitation: { ...detail, prioridade: "ALTA" } },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await changeSolicitationPriority(1, "ALTA");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/solicitations/1/priority", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ prioridade: "ALTA" }),
+    });
+    expect(result.prioridade).toBe("ALTA");
   });
 });

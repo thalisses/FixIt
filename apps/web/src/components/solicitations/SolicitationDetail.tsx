@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { StatusSolicitacao } from "../../lib/assetApi";
 import {
   getSolicitation,
+  changeSolicitationPriority,
   changeSolicitationStatus,
   SolicitationApiError,
+  type NivelPrioridade,
   type SolicitationDetail,
 } from "../../lib/solicitationApi";
 import { useAuth } from "../../context/AuthContext";
@@ -16,6 +18,7 @@ import {
 import {
   formatDateTime,
   formatProtocol,
+  priorityLabels,
   PriorityBadge,
   UrgencyBadge,
 } from "./solicitationPresentation";
@@ -52,6 +55,10 @@ export function SolicitationDetail({
   const [pendingStatus, setPendingStatus] = useState<StatusSolicitacao | null>(
     null,
   );
+  const [priorityDraft, setPriorityDraft] = useState<NivelPrioridade | "">("");
+  const [isSavingPriority, setIsSavingPriority] = useState(false);
+  const [priorityMessage, setPriorityMessage] = useState("");
+  const [priorityError, setPriorityError] = useState("");
   const [reloadCount, setReloadCount] = useState(0);
 
   const handleRequestError = useCallback(
@@ -95,16 +102,40 @@ export function SolicitationDetail({
     };
   }, [id, reloadCount, handleRequestError]);
 
+  useEffect(() => {
+    setPriorityDraft(solicitation?.prioridade ?? "");
+  }, [solicitation?.prioridade]);
+
   if (!user) {
     return null;
   }
 
+  const canManage = user.role === "GESTOR";
   const canUpdate =
     Boolean(solicitation) &&
     (user.role === "GESTOR" ||
       (user.role === "MANUTENTOR" &&
         solicitation?.responsavel?.id === user.id));
   const nextStatus = solicitation ? nextStatusOf(solicitation.status) : null;
+
+  async function savePriority() {
+    if (!priorityDraft) {
+      return;
+    }
+
+    setIsSavingPriority(true);
+    setPriorityMessage("");
+    setPriorityError("");
+    try {
+      const updated = await changeSolicitationPriority(id, priorityDraft);
+      setSolicitation(updated);
+      setPriorityMessage("Prioridade atualizada.");
+    } catch (error) {
+      setPriorityError(handleRequestError(error));
+    } finally {
+      setIsSavingPriority(false);
+    }
+  }
 
   async function confirmStatusChange() {
     if (!pendingStatus) {
@@ -242,6 +273,61 @@ export function SolicitationDetail({
               </dl>
             </div>
           </div>
+
+          {canManage && (
+            <div className="asset-card">
+              <h2>Prioridade de atendimento</h2>
+              <p className="asset-muted">
+                A urgência é declarada pelo solicitante. A prioridade é uma
+                decisão do Gestor e define a ordem da fila.
+              </p>
+              <div className="solicitation-priority-form">
+                <label className="form-field">
+                  <span>Prioridade</span>
+                  <select
+                    name="prioridade"
+                    onChange={(event) => {
+                      setPriorityDraft(
+                        event.target.value as NivelPrioridade | "",
+                      );
+                      setPriorityMessage("");
+                      setPriorityError("");
+                    }}
+                    value={priorityDraft}
+                  >
+                    <option value="">Selecione</option>
+                    {(["ALTA", "MEDIA", "BAIXA"] as const).map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priorityLabels[priority]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary-action solicitation-action-button"
+                  disabled={
+                    !priorityDraft ||
+                    isSavingPriority ||
+                    priorityDraft === solicitation.prioridade
+                  }
+                  onClick={savePriority}
+                  type="button"
+                >
+                  {isSavingPriority ? "Salvando..." : "Salvar prioridade"}
+                </button>
+              </div>
+              {priorityMessage && (
+                <p className="form-success" role="status">
+                  {priorityMessage}
+                </p>
+              )}
+              {priorityError && (
+                <p className="form-error" role="alert">
+                  {priorityError}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="asset-card">
             <h2>Bem vinculado</h2>

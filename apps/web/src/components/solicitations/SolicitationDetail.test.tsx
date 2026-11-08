@@ -37,14 +37,16 @@ interface Backend {
   role?: string;
   userId?: string;
   request?: Detail;
-  patch?(body: unknown): Detail;
+  statusPatch?(body: unknown): Detail;
+  priorityPatch?(body: unknown): Detail;
 }
 
 function stubBackend({
   role = "GESTOR",
   userId = "user-1",
   request = detail,
-  patch,
+  statusPatch,
+  priorityPatch,
 }: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -63,7 +65,13 @@ function stubBackend({
     if (url === "/api/solicitations/1/status" && init?.method === "PATCH") {
       const body = JSON.parse(String(init.body));
       return jsonResponse({
-        data: { solicitation: patch ? patch(body) : request },
+        data: { solicitation: statusPatch ? statusPatch(body) : request },
+      });
+    }
+    if (url === "/api/solicitations/1/priority" && init?.method === "PATCH") {
+      const body = JSON.parse(String(init.body));
+      return jsonResponse({
+        data: { solicitation: priorityPatch ? priorityPatch(body) : request },
       });
     }
     if (url === "/api/solicitations/1") {
@@ -90,6 +98,23 @@ async function mountDetail() {
     );
   });
   await settle();
+}
+
+function setValue(selector: string, value: string) {
+  const element = container.querySelector<
+    HTMLInputElement | HTMLSelectElement
+  >(selector);
+  expect(element, selector).not.toBeNull();
+  const prototype =
+    element instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  act(() => {
+    setter?.call(element, value);
+    element?.dispatchEvent(new Event("input", { bubbles: true }));
+    element?.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 async function clickButton(label: string) {
@@ -131,7 +156,7 @@ describe("SolicitationDetail", () => {
 
   it("lets a Gestor start the attendance", async () => {
     const fetchMock = stubBackend({
-      patch: () => ({ ...detail, status: "EM_ATENDIMENTO" }),
+      statusPatch: () => ({ ...detail, status: "EM_ATENDIMENTO" }),
     });
     await mountDetail();
 
@@ -157,6 +182,28 @@ describe("SolicitationDetail", () => {
     await mountDetail();
 
     expect(container.textContent).not.toContain("Iniciar atendimento");
+    expect(container.textContent).not.toContain("Salvar prioridade");
+  });
+
+  it("lets a Gestor change the priority (US015)", async () => {
+    const fetchMock = stubBackend({
+      priorityPatch: () => ({ ...detail, prioridade: "ALTA" }),
+    });
+    await mountDetail();
+
+    setValue('select[name="prioridade"]', "ALTA");
+    await clickButton("Salvar prioridade");
+
+    const patchCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "/api/solicitations/1/priority" &&
+        init?.method === "PATCH",
+    );
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      prioridade: "ALTA",
+    });
+    expect(container.textContent).toContain("Prioridade atualizada.");
   });
 
   it("shows the action to the assigned Manutentor and hides it otherwise", async () => {

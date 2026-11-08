@@ -274,3 +274,22 @@
     width: 100%;
   }
 }
+
+.solicitation-priority-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  max-width: 520px;
+  margin-top: 16px;
+}
+
+.solicitation-priority-form .form-field {
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .solicitation-priority-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
