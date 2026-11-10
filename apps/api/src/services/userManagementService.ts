@@ -1,4 +1,4 @@
-import { User, UserRole } from "../entities/User.js";
+import { User, UserRole, UserSpecialty } from "../entities/User.js";
 import type { PublicUser } from "./userService.js";
 
 export interface UserManagementRepository {
@@ -19,7 +19,7 @@ export interface UserManagementTransaction {
 }
 
 export interface ManagedUserPage {
-  data: PublicUser[];
+  data: ManagedPublicUser[];
   pagination: {
     page: number;
     pageSize: number;
@@ -28,13 +28,18 @@ export interface ManagedUserPage {
   };
 }
 
+export interface ManagedPublicUser extends PublicUser {
+  specialty: UserSpecialty | null;
+}
+
 export interface UserManagementService {
   list(page: number, pageSize: number): Promise<ManagedUserPage>;
   changeRole(
     userId: string,
     role: UserRole,
     actorId: string,
-  ): Promise<PublicUser>;
+    specialty?: UserSpecialty,
+  ): Promise<ManagedPublicUser>;
 }
 
 export class ManagedUserNotFoundError extends Error {
@@ -65,6 +70,13 @@ export class LastActiveManagerError extends Error {
   }
 }
 
+export class SpecialtyRequiredError extends Error {
+  constructor() {
+    super("A specialty is required for a Manutentor.");
+    this.name = "SpecialtyRequiredError";
+  }
+}
+
 export function createUserManagementService(
   repository: UserManagementRepository,
 ): UserManagementService {
@@ -72,7 +84,7 @@ export function createUserManagementService(
     async list(page, pageSize) {
       const { users, totalItems } = await repository.list(page, pageSize);
       return {
-        data: users.map(toPublicUser),
+        data: users.map(toManagedUser),
         pagination: {
           page,
           pageSize,
@@ -82,7 +94,7 @@ export function createUserManagementService(
       };
     },
 
-    async changeRole(userId, role, actorId) {
+    async changeRole(userId, role, actorId, specialty) {
       return repository.transaction(async (transaction) => {
         await transaction.lockRoleChanges();
         const activeManagers = await transaction.getActiveManagers();
@@ -96,13 +108,19 @@ export function createUserManagementService(
           throw new ManagedUserNotFoundError();
         }
 
-        if (user.role === role) {
-          return toPublicUser(user);
+        const roleChanged = user.role !== role;
+        if (
+          role === UserRole.MANUTENTOR &&
+          specialty === undefined &&
+          (roleChanged || user.specialty === null)
+        ) {
+          throw new SpecialtyRequiredError();
         }
-        if (!isAllowedTransition(user.role, role)) {
+        if (roleChanged && !isAllowedTransition(user.role, role)) {
           throw new RoleTransitionError();
         }
         if (
+          roleChanged &&
           user.role === UserRole.GESTOR &&
           role !== UserRole.GESTOR &&
           activeManagers.length <= 1
@@ -110,8 +128,18 @@ export function createUserManagementService(
           throw new LastActiveManagerError();
         }
 
+        const specialtyChanged =
+          role === UserRole.MANUTENTOR
+            ? specialty !== undefined && specialty !== user.specialty
+            : user.specialty !== null;
+        if (!roleChanged && !specialtyChanged) {
+          return toManagedUser(user);
+        }
+
         user.role = role;
-        return toPublicUser(await transaction.save(user));
+        user.specialty =
+          role === UserRole.MANUTENTOR ? specialty ?? user.specialty : null;
+        return toManagedUser(await transaction.save(user));
       });
     },
   };
@@ -129,12 +157,13 @@ function isAllowedTransition(current: UserRole, next: UserRole): boolean {
   return current === UserRole.GESTOR && next === UserRole.MANUTENTOR;
 }
 
-function toPublicUser(user: User): PublicUser {
+function toManagedUser(user: User): ManagedPublicUser {
   return {
     id: user.id,
     fullName: user.fullName,
     email: user.email,
     institutionId: user.institutionId,
     role: user.role,
+    specialty: user.specialty ?? null,
   };
 }

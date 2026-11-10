@@ -125,6 +125,9 @@ function createFakeRepository(
     async list() {
       return { solicitations, totalItems: solicitations.length };
     },
+    async listActiveMaintainers() {
+      return [];
+    },
     async findById(id) {
       return solicitations.find((candidate) => candidate.id === id) ?? null;
     },
@@ -142,6 +145,7 @@ function createFakeRepository(
         manager: {} as EntityManager,
         findByIdForUpdate: async (id) =>
           solicitations.find((candidate) => candidate.id === id) ?? null,
+        findActiveMaintainerForUpdate: async () => null,
         save: async (solicitationToSave) => solicitationToSave,
       });
     },

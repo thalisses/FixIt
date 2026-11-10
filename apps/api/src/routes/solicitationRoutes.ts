@@ -20,7 +20,20 @@ export function createSolicitationRoutes(
   const requireManager = createRequireRole(UserRole.GESTOR);
 
   router.get("/api/solicitations", requireAuth, controller.list);
+  router.get(
+    "/api/solicitations/:id/maintainers",
+    requireAuth,
+    requireManager,
+    controller.listMaintainers,
+  );
   router.get("/api/solicitations/:id", requireAuth, controller.get);
+  router.patch(
+    "/api/solicitations/:id/assignee",
+    requireAuth,
+    requireAllowedOrigin,
+    requireManager,
+    controller.assignMaintainer,
+  );
   router.patch(
     "/api/solicitations/:id/priority",
     requireAuth,

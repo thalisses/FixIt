@@ -1,5 +1,6 @@
 import {
   Column,
+  Check,
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
@@ -12,7 +13,19 @@ export enum UserRole {
   GESTOR = "GESTOR",
 }
 
+export enum UserSpecialty {
+  ELETRICA = "ELETRICA",
+  HIDRAULICA = "HIDRAULICA",
+  INFORMATICA = "INFORMATICA",
+  ESTRUTURAL = "ESTRUTURAL",
+  OUTROS = "OUTROS",
+}
+
 @Entity({ name: "users" })
+@Check(
+  "users_specialty_role_check",
+  `"role" = 'MANUTENTOR' OR "specialty" IS NULL`,
+)
 export class User {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -43,6 +56,15 @@ export class User {
     default: UserRole.CLIENTE,
   })
   role!: UserRole;
+
+  @Column({
+    name: "specialty",
+    type: "enum",
+    enum: UserSpecialty,
+    enumName: "user_specialty_enum",
+    nullable: true,
+  })
+  specialty!: UserSpecialty | null;
 
   @Column({ name: "is_active", type: "boolean", default: true })
   isActive!: boolean;

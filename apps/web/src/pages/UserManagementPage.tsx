@@ -8,6 +8,7 @@ import {
   UserManagementApiError,
   type ManagedUser,
   type SessionUser,
+  type UserSpecialty,
 } from "../lib/authApi";
 
 interface UserManagementPageProps {
@@ -18,6 +19,7 @@ interface UserManagementPageProps {
 interface PendingRoleChange {
   userId: string;
   role: SessionUser["role"];
+  specialty?: UserSpecialty;
 }
 
 const pageSize = 20;
@@ -27,6 +29,22 @@ const roleLabels: Record<SessionUser["role"], string> = {
   MANUTENTOR: "Manutentor",
   GESTOR: "Gestor",
 };
+
+const specialtyLabels: Record<UserSpecialty, string> = {
+  ELETRICA: "Elétrica",
+  HIDRAULICA: "Hidráulica",
+  INFORMATICA: "Informática",
+  ESTRUTURAL: "Estrutural",
+  OUTROS: "Outros",
+};
+
+const specialties: UserSpecialty[] = [
+  "ELETRICA",
+  "HIDRAULICA",
+  "INFORMATICA",
+  "ESTRUTURAL",
+  "OUTROS",
+];
 
 export function UserManagementPage({
   onLoggedOut,
@@ -42,6 +60,9 @@ export function UserManagementPage({
   const [changingUserId, setChangingUserId] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<
     Record<string, SessionUser["role"] | "">
+  >({});
+  const [selectedSpecialties, setSelectedSpecialties] = useState<
+    Record<string, UserSpecialty | "">
   >({});
   const [pendingChange, setPendingChange] =
     useState<PendingRoleChange | null>(null);
@@ -95,12 +116,20 @@ export function UserManagementPage({
 
   function prepareRoleChange(userId: string) {
     const role = selectedRoles[userId];
-    if (!role) {
+    const managedUser = users.find((candidate) => candidate.id === userId);
+    if (!role || !managedUser) {
+      return;
+    }
+    const specialty =
+      role === "MANUTENTOR"
+        ? selectedSpecialties[userId] || managedUser.specialty || undefined
+        : undefined;
+    if (role === "MANUTENTOR" && !specialty) {
       return;
     }
     setErrorMessage("");
     setSuccessMessage("");
-    setPendingChange({ userId, role });
+    setPendingChange({ userId, role, specialty });
   }
 
   async function confirmRoleChange() {
@@ -108,21 +137,24 @@ export function UserManagementPage({
       return;
     }
 
-    const { userId, role } = pendingChange;
+    const { userId, role, specialty } = pendingChange;
     setChangingUserId(userId);
     setErrorMessage("");
     setSuccessMessage("");
     try {
-      const updatedUser = await changeUserRole(userId, role);
+      const updatedUser = await changeUserRole(userId, role, specialty);
       setUsers((currentUsers) =>
         currentUsers.map((currentUser) =>
           currentUser.id === updatedUser.id ? updatedUser : currentUser,
         ),
       );
       setSelectedRoles((current) => ({ ...current, [userId]: "" }));
+      setSelectedSpecialties((current) => ({ ...current, [userId]: "" }));
       setPendingChange(null);
       setSuccessMessage(
-        `Perfil atualizado para ${roleLabels[updatedUser.role]}.`,
+        updatedUser.specialty
+          ? `Usuário atualizado: ${roleLabels[updatedUser.role]} · ${specialtyLabels[updatedUser.specialty]}.`
+          : `Perfil atualizado para ${roleLabels[updatedUser.role]}.`,
       );
       if (updatedUser.id === currentUserId) {
         await refresh();
@@ -185,6 +217,23 @@ export function UserManagementPage({
                 const availableRoles = getAvailableRoles(managedUser.role);
                 const isPending = pendingChange?.userId === managedUser.id;
                 const isChanging = changingUserId === managedUser.id;
+                const selectedRole = selectedRoles[managedUser.id] ?? "";
+                const selectedSpecialty =
+                  selectedSpecialties[managedUser.id] ??
+                  (selectedRole === "MANUTENTOR"
+                    ? managedUser.specialty ?? ""
+                    : "");
+                const hasRoleChange =
+                  selectedRole !== "" && selectedRole !== managedUser.role;
+                const hasSpecialtyChange =
+                  selectedRole === "MANUTENTOR" &&
+                  selectedSpecialty !== "" &&
+                  selectedSpecialty !== managedUser.specialty;
+                const canSaveChange =
+                  selectedRole === "MANUTENTOR"
+                    ? Boolean(selectedSpecialty) &&
+                      (hasRoleChange || hasSpecialtyChange)
+                    : hasRoleChange;
 
                 return (
                   <li className="user-management-row" key={managedUser.id}>
@@ -192,6 +241,14 @@ export function UserManagementPage({
                       <strong>{managedUser.fullName}</strong>
                       <span>{managedUser.email}</span>
                       <span>{getInstitutionLabel(managedUser.institutionId)}</span>
+                      <span>
+                        Especialidade:{" "}
+                        {managedUser.specialty
+                          ? specialtyLabels[managedUser.specialty]
+                          : managedUser.role === "MANUTENTOR"
+                            ? "Pendente"
+                            : "Não se aplica"}
+                      </span>
                     </div>
                     <span
                       className={`role-badge role-${managedUser.role.toLowerCase()}`}
@@ -223,11 +280,38 @@ export function UserManagementPage({
                           ))}
                         </select>
                       </label>
+                      {selectedRole === "MANUTENTOR" && (
+                        <label className="management-field">
+                          <span>Especialidade (obrigatória)</span>
+                          <select
+                            aria-label={`Nova especialidade para ${managedUser.fullName}`}
+                            disabled={isChanging}
+                            onChange={(event) => {
+                              setSelectedSpecialties((current) => ({
+                                ...current,
+                                [managedUser.id]: parseSelectedSpecialty(
+                                  event.target.value,
+                                ),
+                              }));
+                              setPendingChange(null);
+                            }}
+                            required
+                            value={selectedSpecialty}
+                          >
+                            <option value="">Selecione</option>
+                            {specialties.map((specialty) => (
+                              <option key={specialty} value={specialty}>
+                                {specialtyLabels[specialty]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       <button
                         className="primary-action role-change-action"
                         disabled={
                           isChanging ||
-                          !selectedRoles[managedUser.id] ||
+                          !canSaveChange ||
                           availableRoles.length === 0
                         }
                         onClick={() => prepareRoleChange(managedUser.id)}
@@ -244,7 +328,11 @@ export function UserManagementPage({
                         >
                           <p>
                             Alterar {managedUser.fullName} para{" "}
-                            {roleLabels[pendingChange.role]}?
+                            {roleLabels[pendingChange.role]}
+                            {pendingChange.specialty
+                              ? `, especialidade ${specialtyLabels[pendingChange.specialty]}`
+                              : ""}
+                            ?
                           </p>
                           <button
                             ref={confirmButtonRef}
@@ -306,9 +394,22 @@ function getAvailableRoles(
     case "CLIENTE":
       return ["MANUTENTOR", "GESTOR"];
     case "MANUTENTOR":
-      return ["GESTOR"];
+      return ["MANUTENTOR", "GESTOR"];
     case "GESTOR":
       return ["MANUTENTOR"];
+  }
+}
+
+function parseSelectedSpecialty(value: string): UserSpecialty | "" {
+  switch (value) {
+    case "ELETRICA":
+    case "HIDRAULICA":
+    case "INFORMATICA":
+    case "ESTRUTURAL":
+    case "OUTROS":
+      return value;
+    default:
+      return "";
   }
 }
 

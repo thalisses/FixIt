@@ -3,7 +3,7 @@ import {
   type NextFunction,
   type Response,
 } from "express";
-import { UserRole } from "../entities/User.js";
+import { UserRole, UserSpecialty } from "../entities/User.js";
 import { createCsrfMiddleware } from "../middleware/csrf.js";
 import { createRequireAuth } from "../middleware/requireAuth.js";
 import { createRequireRole } from "../middleware/requireRole.js";
@@ -13,6 +13,7 @@ import {
   ManagedUserNotFoundError,
   ManagerAuthorizationError,
   RoleTransitionError,
+  SpecialtyRequiredError,
   type UserManagementService,
 } from "../services/userManagementService.js";
 
@@ -57,8 +58,14 @@ export function createUserManagementRoutes(
     (request, response, next) => {
       const { userId } = request.params;
       const role = parseUserRole(request.body);
+      const specialty = parseUserSpecialty(request.body);
       const actorId = request.authUser?.id;
-      if (!userIdPattern.test(userId) || !role) {
+      if (
+        !userIdPattern.test(userId) ||
+        !role ||
+        !specialty.valid ||
+        (role !== UserRole.MANUTENTOR && specialty.value !== undefined)
+      ) {
         response.status(422).json({
           error: {
             code: "VALIDATION_ERROR",
@@ -77,7 +84,9 @@ export function createUserManagementRoutes(
         return;
       }
 
-      void userManagementService.changeRole(userId, role, actorId).then(
+      void userManagementService
+        .changeRole(userId, role, actorId, specialty.value)
+        .then(
         (user) => response.status(200).json({ data: { user } }),
         (error: unknown) => handleRoleChangeError(error, response, next),
       );
@@ -110,6 +119,32 @@ function parseUserRole(value: unknown): UserRole | null {
     role === UserRole.GESTOR
     ? role
     : null;
+}
+
+function parseUserSpecialty(
+  value: unknown,
+): { valid: true; value?: UserSpecialty } | { valid: false } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return { valid: false };
+  }
+
+  if (!("specialty" in value) || value.specialty === undefined) {
+    return { valid: true };
+  }
+  if (!isUserSpecialty(value.specialty)) {
+    return { valid: false };
+  }
+  return { valid: true, value: value.specialty };
+}
+
+function isUserSpecialty(value: unknown): value is UserSpecialty {
+  return (
+    value === UserSpecialty.ELETRICA ||
+    value === UserSpecialty.HIDRAULICA ||
+    value === UserSpecialty.INFORMATICA ||
+    value === UserSpecialty.ESTRUTURAL ||
+    value === UserSpecialty.OUTROS
+  );
 }
 
 function handleRoleChangeError(
@@ -146,6 +181,15 @@ function handleRoleChangeError(
       error: {
         code: "ROLE_TRANSITION_NOT_ALLOWED",
         message: "Esta alteração de perfil não é permitida.",
+      },
+    });
+    return;
+  }
+  if (error instanceof SpecialtyRequiredError) {
+    response.status(422).json({
+      error: {
+        code: "SPECIALTY_REQUIRED",
+        message: "Selecione uma especialidade para o perfil de Manutentor.",
       },
     });
     return;

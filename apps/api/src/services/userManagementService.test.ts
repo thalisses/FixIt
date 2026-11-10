@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { User, UserRole } from "../entities/User.js";
+import { User, UserRole, UserSpecialty } from "../entities/User.js";
 import {
   createUserManagementService,
   LastActiveManagerError,
   ManagedUserNotFoundError,
   ManagerAuthorizationError,
   RoleTransitionError,
+  SpecialtyRequiredError,
   type UserManagementRepository,
 } from "./userManagementService.js";
 
@@ -20,6 +21,7 @@ function createUser(id: string, role: UserRole): User {
     cityUf: null,
     institutionId: "UEM",
     role,
+    specialty: null,
     isActive: true,
   });
   return user;
@@ -61,6 +63,7 @@ describe("user management service", () => {
           email: "manager-1@example.edu",
           institutionId: "UEM",
           role: UserRole.GESTOR,
+          specialty: null,
         },
       ],
       pagination: {
@@ -83,10 +86,18 @@ describe("user management service", () => {
     const service = createUserManagementService(
       createRepository([manager, target]),
     );
+    const specialty =
+      nextRole === UserRole.MANUTENTOR
+        ? UserSpecialty.INFORMATICA
+        : undefined;
 
     await expect(
-      service.changeRole(target.id, nextRole, manager.id),
-    ).resolves.toMatchObject({ id: target.id, role: nextRole });
+      service.changeRole(target.id, nextRole, manager.id, specialty),
+    ).resolves.toMatchObject({
+      id: target.id,
+      role: nextRole,
+      specialty: specialty ?? null,
+    });
   });
 
   it("prevents a change that would remove the last active Gestor", async () => {
@@ -96,8 +107,60 @@ describe("user management service", () => {
     );
 
     await expect(
-      service.changeRole(manager.id, UserRole.MANUTENTOR, manager.id),
+      service.changeRole(
+        manager.id,
+        UserRole.MANUTENTOR,
+        manager.id,
+        UserSpecialty.OUTROS,
+      ),
     ).rejects.toBeInstanceOf(LastActiveManagerError);
+  });
+
+  it("requires a specialty to promote or complete a Manutentor profile", async () => {
+    const manager = createUser("manager-1", UserRole.GESTOR);
+    const client = createUser("client-1", UserRole.CLIENTE);
+    const pendingMaintainer = createUser("maintainer-1", UserRole.MANUTENTOR);
+    const service = createUserManagementService(
+      createRepository([manager, client, pendingMaintainer]),
+    );
+
+    await expect(
+      service.changeRole(client.id, UserRole.MANUTENTOR, manager.id),
+    ).rejects.toBeInstanceOf(SpecialtyRequiredError);
+    await expect(
+      service.changeRole(
+        pendingMaintainer.id,
+        UserRole.MANUTENTOR,
+        manager.id,
+      ),
+    ).rejects.toBeInstanceOf(SpecialtyRequiredError);
+    await expect(
+      service.changeRole(
+        pendingMaintainer.id,
+        UserRole.MANUTENTOR,
+        manager.id,
+        UserSpecialty.ESTRUTURAL,
+      ),
+    ).resolves.toMatchObject({
+      role: UserRole.MANUTENTOR,
+      specialty: UserSpecialty.ESTRUTURAL,
+    });
+  });
+
+  it("clears the specialty when a Manutentor changes to Gestor", async () => {
+    const manager = createUser("manager-1", UserRole.GESTOR);
+    const maintainer = createUser("maintainer-1", UserRole.MANUTENTOR);
+    maintainer.specialty = UserSpecialty.ELETRICA;
+    const service = createUserManagementService(
+      createRepository([manager, maintainer]),
+    );
+
+    await expect(
+      service.changeRole(maintainer.id, UserRole.GESTOR, manager.id),
+    ).resolves.toMatchObject({
+      role: UserRole.GESTOR,
+      specialty: null,
+    });
   });
 
   it("rejects unsupported transitions and non-manager actors", async () => {

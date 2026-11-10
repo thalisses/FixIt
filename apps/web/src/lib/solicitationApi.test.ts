@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assignSolicitationMaintainer,
   changeSolicitationPriority,
   changeSolicitationStatus,
   getSolicitation,
   listSolicitations,
+  listSolicitationMaintainers,
   SolicitationApiError,
   type SolicitationDetail,
   type SolicitationListItem,
@@ -206,5 +208,48 @@ describe("changeSolicitationPriority", () => {
       body: JSON.stringify({ prioridade: "ALTA" }),
     });
     expect(result.prioridade).toBe("ALTA");
+  });
+});
+
+describe("solicitation Manutentor assignment API", () => {
+  it("loads candidates in API compatibility order", async () => {
+    const candidates = [
+      {
+        id: "maintainer-1",
+        fullName: "Carla",
+        specialty: "INFORMATICA",
+      },
+      { id: "maintainer-2", fullName: "João", specialty: null },
+    ];
+    const fetchMock = vi.fn(async () => jsonResponse({ data: candidates }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listSolicitationMaintainers(1)).resolves.toEqual(candidates);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/solicitations/1/maintainers",
+      { credentials: "same-origin" },
+    );
+  });
+
+  it("assigns the selected Manutentor", async () => {
+    const assigned = {
+      ...detail,
+      responsavel: { id: "maintainer-1", fullName: "Carla" },
+    };
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: { solicitation: assigned } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      assignSolicitationMaintainer(1, "maintainer-1"),
+    ).resolves.toEqual(assigned);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/solicitations/1/assignee",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ maintainerId: "maintainer-1" }),
+      }),
+    );
   });
 });

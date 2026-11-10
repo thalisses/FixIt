@@ -29,6 +29,7 @@ export interface NewUser {
   cityUf: string | null;
   institutionId: InstitutionId;
   role: UserRole;
+  specialty: null;
   isActive: boolean;
 }
 
@@ -82,6 +83,7 @@ export function createUserService(
         cityUf: input.cityUf?.trim() || null,
         institutionId: input.institutionId,
         role: UserRole.CLIENTE,
+        specialty: null,
         isActive: true,
       });
 

@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { StatusSolicitacao } from "../../lib/assetApi";
 import {
   getSolicitation,
+  assignSolicitationMaintainer,
   changeSolicitationPriority,
   changeSolicitationStatus,
+  listSolicitationMaintainers,
   SolicitationApiError,
+  type MaintainerCandidate,
   type NivelPrioridade,
   type SolicitationDetail,
 } from "../../lib/solicitationApi";
@@ -61,6 +64,12 @@ export function SolicitationDetail({
   const [priorityMessage, setPriorityMessage] = useState("");
   const [priorityError, setPriorityError] = useState("");
   const [reloadCount, setReloadCount] = useState(0);
+  const [maintainers, setMaintainers] = useState<MaintainerCandidate[]>([]);
+  const [selectedMaintainerId, setSelectedMaintainerId] = useState("");
+  const [isLoadingMaintainers, setIsLoadingMaintainers] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignmentMessage, setAssignmentMessage] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
 
   const handleRequestError = useCallback(
     (error: unknown): string => {
@@ -107,6 +116,41 @@ export function SolicitationDetail({
     setPriorityDraft(solicitation?.prioridade ?? "");
   }, [solicitation?.prioridade]);
 
+  useEffect(() => {
+    setSelectedMaintainerId(solicitation?.responsavel?.id ?? "");
+  }, [solicitation?.responsavel?.id]);
+
+  useEffect(() => {
+    if (user?.role !== "GESTOR") {
+      setMaintainers([]);
+      return undefined;
+    }
+
+    let isCurrent = true;
+    setIsLoadingMaintainers(true);
+    setAssignmentError("");
+    void listSolicitationMaintainers(id)
+      .then((result) => {
+        if (isCurrent) {
+          setMaintainers(result);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) {
+          setAssignmentError(handleRequestError(error));
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingMaintainers(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [id, reloadCount, user?.role, handleRequestError]);
+
   if (!user) {
     return null;
   }
@@ -135,6 +179,27 @@ export function SolicitationDetail({
       setPriorityError(handleRequestError(error));
     } finally {
       setIsSavingPriority(false);
+    }
+  }
+
+  async function saveAssignment() {
+    if (!selectedMaintainerId) {
+      return;
+    }
+    setIsAssigning(true);
+    setAssignmentMessage("");
+    setAssignmentError("");
+    try {
+      const updated = await assignSolicitationMaintainer(
+        id,
+        selectedMaintainerId,
+      );
+      setSolicitation(updated);
+      setAssignmentMessage("Responsável atualizado.");
+    } catch (error) {
+      setAssignmentError(handleRequestError(error));
+    } finally {
+      setIsAssigning(false);
     }
   }
 
@@ -325,6 +390,77 @@ export function SolicitationDetail({
               {priorityError && (
                 <p className="form-error" role="alert">
                   {priorityError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {canManage && (
+            <div className="asset-card">
+              <h2>Responsável pela solicitação</h2>
+              <p className="asset-muted">
+                Todos os manutentores ativos são listados; os compatíveis com
+                {` ${tipoProblemaLabels[solicitation.tipoProblema].toLowerCase()}`}
+                aparecem primeiro.
+              </p>
+              {isLoadingMaintainers ? (
+                <p role="status" aria-busy="true">
+                  Carregando manutentores...
+                </p>
+              ) : maintainers.length === 0 ? (
+                <p className="asset-muted">
+                  Nenhum manutentor ativo cadastrado.
+                </p>
+              ) : (
+                <div className="solicitation-priority-form">
+                  <label className="form-field">
+                    <span>Manutentor</span>
+                    <select
+                      aria-label="Manutentor responsável"
+                      disabled={isAssigning}
+                      onChange={(event) => {
+                        setSelectedMaintainerId(event.target.value);
+                        setAssignmentMessage("");
+                        setAssignmentError("");
+                      }}
+                      value={selectedMaintainerId}
+                    >
+                      <option value="">Selecione</option>
+                      {maintainers.map((maintainer) => (
+                        <option key={maintainer.id} value={maintainer.id}>
+                          {maintainer.fullName} ·{" "}
+                          {maintainer.specialty
+                            ? tipoProblemaLabels[maintainer.specialty]
+                            : "Especialidade pendente"}
+                          {maintainer.specialty === solicitation.tipoProblema
+                            ? " · Compatível"
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="primary-action solicitation-action-button"
+                    disabled={
+                      !selectedMaintainerId ||
+                      selectedMaintainerId === solicitation.responsavel?.id ||
+                      isAssigning
+                    }
+                    onClick={saveAssignment}
+                    type="button"
+                  >
+                    {isAssigning ? "Salvando..." : "Atribuir Manutentor"}
+                  </button>
+                </div>
+              )}
+              {assignmentMessage && (
+                <p className="form-success" role="status">
+                  {assignmentMessage}
+                </p>
+              )}
+              {assignmentError && (
+                <p className="form-error" role="alert">
+                  {assignmentError}
                 </p>
               )}
             </div>

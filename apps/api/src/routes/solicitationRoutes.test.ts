@@ -12,12 +12,17 @@ import {
   Solicitation,
   StatusSolicitacao,
 } from "../entities/Solicitation.js";
-import { User, UserRole } from "../entities/User.js";
+import { User, UserRole, UserSpecialty } from "../entities/User.js";
+import { StatusHistory } from "../entities/StatusHistory.js";
 import type {
   SolicitationListFilters,
   SolicitationListScope,
   SolicitationRepository,
 } from "../repositories/solicitationRepository.js";
+import type {
+  NewStatusHistory,
+  StatusHistoryRepository,
+} from "../repositories/statusHistoryRepository.js";
 import type { SessionRepository } from "../services/sessionService.js";
 import type { UserManagementRepository } from "../services/userManagementService.js";
 import type { UserRepository } from "../services/userService.js";
@@ -133,6 +138,7 @@ interface Calls {
 function createFakeRepository(
   solicitations: Solicitation[] = [solicitation(1)],
   totalItems = solicitations.length,
+  maintainers: User[] = [],
 ): SolicitationRepository & { calls: Calls[] } {
   const calls: Calls[] = [];
 
@@ -141,6 +147,9 @@ function createFakeRepository(
     async list(filters, scope) {
       calls.push({ filters, scope });
       return { solicitations, totalItems };
+    },
+    async listActiveMaintainers() {
+      return maintainers;
     },
     async findById(id) {
       return solicitations.find((candidate) => candidate.id === id) ?? null;
@@ -158,13 +167,36 @@ function createFakeRepository(
         manager: {} as EntityManager,
         findByIdForUpdate: async (id) =>
           solicitations.find((candidate) => candidate.id === id) ?? null,
-        save: async (solicitation) => solicitation,
+        findActiveMaintainerForUpdate: async (userId) =>
+          maintainers.find(
+            (candidate) =>
+              candidate.id === userId &&
+              candidate.isActive &&
+              candidate.role === UserRole.MANUTENTOR,
+          ) ?? null,
+        save: async (request) => {
+          const found = solicitations.find(
+            (candidate) => candidate.id === request.id,
+          );
+          if (found) {
+            Object.assign(found, request);
+            found.responsavel =
+              maintainers.find(
+                (candidate) => candidate.id === request.responsavelId,
+              ) ?? null;
+            return found;
+          }
+          return request;
+        },
       });
     },
   };
 }
 
-async function startServer(repository: SolicitationRepository): Promise<string> {
+async function startServer(
+  repository: SolicitationRepository,
+  statusHistoryRepository?: StatusHistoryRepository,
+): Promise<string> {
   server = createApp(
     async () => undefined,
     userRepository,
@@ -172,7 +204,7 @@ async function startServer(repository: SolicitationRepository): Promise<string> 
     userManagementRepository,
     { secureCookies: false, webOrigin },
     undefined,
-    undefined,
+    statusHistoryRepository,
     repository,
   ).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -183,6 +215,41 @@ async function startServer(repository: SolicitationRepository): Promise<string> 
   }
 
   return `http://127.0.0.1:${address.port}`;
+}
+
+function candidate(
+  id: string,
+  fullName: string,
+  specialty: UserSpecialty | null,
+): User {
+  return Object.assign(new User(), {
+    id,
+    fullName,
+    role: UserRole.MANUTENTOR,
+    specialty,
+    isActive: true,
+  });
+}
+
+function createHistoryRepository(
+  entries: NewStatusHistory[],
+): StatusHistoryRepository {
+  return {
+    async create(entry) {
+      entries.push(entry);
+      return Object.assign(new StatusHistory(), entry, {
+        id: entries.length,
+        dataHora: new Date("2026-11-07T13:00:00.000Z"),
+        autor: loggedUser,
+      });
+    },
+    async findSolicitationState() {
+      return null;
+    },
+    async listBySolicitation() {
+      return [];
+    },
+  };
 }
 
 function getList(
@@ -259,6 +326,7 @@ describe("GET /api/solicitations", () => {
         totalPages: 1,
       },
     });
+
     expect(JSON.stringify(body)).not.toContain("hash-que-nao-pode-vazar");
     expect(JSON.stringify(body)).not.toContain("passwordHash");
   });
@@ -401,6 +469,92 @@ describe("GET /api/solicitations", () => {
             "Não combine 'sem responsável' com um responsável específico.",
         },
       },
+    });
+  });
+
+  describe("solicitation Manutentor assignment", () => {
+    it("returns all active Manutentores with matching specialty first", async () => {
+      loggedUser.role = UserRole.GESTOR;
+      const maintainers = [
+        candidate("maintainer-3", "Carla Lima", UserSpecialty.ELETRICA),
+        candidate("maintainer-2", "Bruno Alves", UserSpecialty.INFORMATICA),
+        candidate("maintainer-4", "Ana Silva", null),
+      ];
+      const baseUrl = await startServer(
+        createFakeRepository([solicitation(1)], 1, maintainers),
+      );
+
+      const response = await fetch(
+        `${baseUrl}/api/solicitations/1/maintainers`,
+        { headers: { Cookie: `fixit_session=${sessionToken}` } },
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        data: [
+          {
+            id: "maintainer-2",
+            fullName: "Bruno Alves",
+            specialty: UserSpecialty.INFORMATICA,
+          },
+          {
+            id: "maintainer-4",
+            fullName: "Ana Silva",
+            specialty: null,
+          },
+          {
+            id: "maintainer-3",
+            fullName: "Carla Lima",
+            specialty: UserSpecialty.ELETRICA,
+          },
+        ],
+      });
+    });
+
+    it("assigns an active Manutentor and records the assignment", async () => {
+      loggedUser.role = UserRole.GESTOR;
+      const target = candidate(
+        "33333333-3333-4333-8333-333333333333",
+        "Bruno Alves",
+        UserSpecialty.INFORMATICA,
+      );
+      const request = solicitation(1);
+      const entries: NewStatusHistory[] = [];
+      const baseUrl = await startServer(
+        createFakeRepository([request], 1, [target]),
+        createHistoryRepository(entries),
+      );
+
+      const response = await fetch(
+        `${baseUrl}/api/solicitations/1/assignee`,
+        {
+          method: "PATCH",
+          headers: {
+            Cookie: `fixit_session=${sessionToken}`,
+            Origin: webOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ maintainerId: target.id }),
+        },
+      );
+
+      const body = await response.json();
+      expect(response.status, JSON.stringify(body)).toBe(200);
+      expect(body).toMatchObject({
+        data: {
+          solicitation: {
+            id: 1,
+            responsavel: { id: target.id, fullName: target.fullName },
+          },
+        },
+      });
+      expect(entries).toMatchObject([
+        {
+          tipo: "ATRIBUICAO",
+          autorId: loggedUser.id,
+          descricao: "Responsável atribuído: Bruno Alves",
+        },
+      ]);
     });
   });
 });

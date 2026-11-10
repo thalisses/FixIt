@@ -2,7 +2,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../../context/AuthContext";
-import type { SolicitationDetail as Detail } from "../../lib/solicitationApi";
+import type {
+  MaintainerCandidate,
+  SolicitationDetail as Detail,
+} from "../../lib/solicitationApi";
 import { SolicitationDetail } from "./SolicitationDetail";
 
 let container: HTMLDivElement;
@@ -39,6 +42,8 @@ interface Backend {
   request?: Detail;
   statusPatch?(body: unknown): Detail;
   priorityPatch?(body: unknown): Detail;
+  maintainers?: MaintainerCandidate[];
+  assignmentPatch?(body: { maintainerId: string }): Detail;
 }
 
 function stubBackend({
@@ -47,6 +52,8 @@ function stubBackend({
   request = detail,
   statusPatch,
   priorityPatch,
+  maintainers = [],
+  assignmentPatch,
 }: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -72,6 +79,21 @@ function stubBackend({
       const body = JSON.parse(String(init.body));
       return jsonResponse({
         data: { solicitation: priorityPatch ? priorityPatch(body) : request },
+      });
+    }
+    if (url === "/api/solicitations/1/maintainers") {
+      return jsonResponse({ data: maintainers });
+    }
+    if (url === "/api/solicitations/1/assignee" && init?.method === "PATCH") {
+      const body = JSON.parse(String(init.body)) as {
+        maintainerId: string;
+      };
+      return jsonResponse({
+        data: {
+          solicitation: assignmentPatch
+            ? assignmentPatch(body)
+            : request,
+        },
       });
     }
     if (url === "/api/solicitations/1/history") {
@@ -207,6 +229,53 @@ describe("SolicitationDetail", () => {
       prioridade: "ALTA",
     });
     expect(container.textContent).toContain("Prioridade atualizada.");
+  });
+
+  it("shows all maintainers in server order and assigns the selected one", async () => {
+    const compatible = {
+      id: "33333333-3333-4333-8333-333333333333",
+      fullName: "Carla Lima",
+      specialty: "INFORMATICA" as const,
+    };
+    const other = {
+      id: "44444444-4444-4444-8444-444444444444",
+      fullName: "João Souza",
+      specialty: "ELETRICA" as const,
+    };
+    const fetchMock = stubBackend({
+      maintainers: [compatible, other],
+      assignmentPatch: () => ({
+        ...detail,
+        responsavel: { id: compatible.id, fullName: compatible.fullName },
+      }),
+    });
+    await mountDetail();
+
+    const select = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Manutentor responsável"]',
+    );
+    expect(select).not.toBeNull();
+    expect(
+      Array.from(select?.options ?? []).map((option) => option.textContent),
+    ).toEqual([
+      "Selecione",
+      "Carla Lima · Informática · Compatível",
+      "João Souza · Elétrica",
+    ]);
+
+    setValue('select[aria-label="Manutentor responsável"]', compatible.id);
+    await clickButton("Atribuir Manutentor");
+
+    const patchCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "/api/solicitations/1/assignee" &&
+        init?.method === "PATCH",
+    );
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+      maintainerId: compatible.id,
+    });
+    expect(container.textContent).toContain("Responsável atualizado.");
   });
 
   it("shows the action to the assigned Manutentor and hides it otherwise", async () => {

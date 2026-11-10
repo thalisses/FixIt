@@ -4,6 +4,7 @@ import type { Solicitation } from "../entities/Solicitation.js";
 import {
   ForbiddenSolicitationError,
   InvalidStatusTransitionError,
+  MaintainerNotFoundError,
   type SolicitationService,
 } from "../services/solicitationService.js";
 import { SolicitationNotFoundError } from "../services/statusHistoryService.js";
@@ -11,6 +12,7 @@ import { idParamSchema } from "../validators/idParamSchema.js";
 import {
   changeSolicitationPrioritySchema,
   changeSolicitationStatusSchema,
+  assignSolicitationMaintainerSchema,
   solicitationListQuerySchema,
 } from "../validators/solicitationValidators.js";
 
@@ -193,6 +195,106 @@ export function createSolicitationController(service: SolicitationService) {
         }
         if (error instanceof ForbiddenSolicitationError) {
           sendForbidden(response);
+          return;
+        }
+        next(error);
+      }
+    },
+
+    async listMaintainers(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const id = idParamSchema.safeParse(request.params);
+      if (!id.success) {
+        sendValidationError(response, id.error, "Identificador inválido.");
+        return;
+      }
+
+      const user = request.authUser;
+      if (!user) {
+        response.status(401).json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Autenticação necessária.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const maintainers = await service.listMaintainers(id.data.id, user);
+        response.status(200).json({ data: maintainers });
+      } catch (error) {
+        if (error instanceof SolicitationNotFoundError) {
+          sendNotFound(response);
+          return;
+        }
+        if (error instanceof ForbiddenSolicitationError) {
+          sendForbidden(response);
+          return;
+        }
+        next(error);
+      }
+    },
+
+    async assignMaintainer(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const id = idParamSchema.safeParse(request.params);
+      if (!id.success) {
+        sendValidationError(response, id.error, "Identificador inválido.");
+        return;
+      }
+      const body = assignSolicitationMaintainerSchema.safeParse(request.body);
+      if (!body.success) {
+        sendValidationError(
+          response,
+          body.error,
+          "Dados de atribuição inválidos.",
+        );
+        return;
+      }
+
+      const user = request.authUser;
+      if (!user) {
+        response.status(401).json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Autenticação necessária.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const solicitation = await service.assignMaintainer(
+          id.data.id,
+          body.data.maintainerId,
+          user,
+        );
+        response
+          .status(200)
+          .json({ data: { solicitation: toDetail(solicitation) } });
+      } catch (error) {
+        if (error instanceof SolicitationNotFoundError) {
+          sendNotFound(response);
+          return;
+        }
+        if (error instanceof ForbiddenSolicitationError) {
+          sendForbidden(response);
+          return;
+        }
+        if (error instanceof MaintainerNotFoundError) {
+          response.status(404).json({
+            error: {
+              code: "MAINTAINER_NOT_FOUND",
+              message: "Manutentor não encontrado ou inativo.",
+            },
+          });
           return;
         }
         next(error);

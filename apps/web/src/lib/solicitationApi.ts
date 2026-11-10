@@ -8,6 +8,10 @@ export interface SolicitationUser {
   fullName: string;
 }
 
+export interface MaintainerCandidate extends SolicitationUser {
+  specialty: AreaTecnica | null;
+}
+
 export interface SolicitationAsset {
   id: number;
   codigoPatrimonial: string;
@@ -131,6 +135,40 @@ export async function changeSolicitationPriority(
     },
   );
 
+  return readDetail(body);
+}
+
+export async function listSolicitationMaintainers(
+  id: number,
+): Promise<MaintainerCandidate[]> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/maintainers`,
+    "Não foi possível carregar os manutentores.",
+  );
+  if (
+    !isRecord(body) ||
+    !Array.isArray(body.data) ||
+    !body.data.every(isMaintainerCandidate)
+  ) {
+    throw invalidResponse();
+  }
+  return body.data;
+}
+
+export async function assignSolicitationMaintainer(
+  id: number,
+  maintainerId: string,
+): Promise<SolicitationDetail> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/assignee`,
+    "Não foi possível atribuir o manutentor.",
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ maintainerId }),
+    },
+  );
   return readDetail(body);
 }
 
@@ -332,6 +370,26 @@ function isSolicitationUser(value: unknown): value is SolicitationUser {
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.fullName === "string"
+  );
+}
+
+function isMaintainerCandidate(
+  value: unknown,
+): value is MaintainerCandidate {
+  return (
+    isSolicitationUser(value) &&
+    isRecord(value) &&
+    (value.specialty === null || isAreaTecnica(value.specialty))
+  );
+}
+
+function isAreaTecnica(value: unknown): value is AreaTecnica {
+  return (
+    value === "ELETRICA" ||
+    value === "HIDRAULICA" ||
+    value === "INFORMATICA" ||
+    value === "ESTRUTURAL" ||
+    value === "OUTROS"
   );
 }
 

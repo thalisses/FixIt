@@ -22,8 +22,16 @@ export interface SessionUser {
   role: "CLIENTE" | "MANUTENTOR" | "GESTOR";
 }
 
+export type UserSpecialty =
+  | "ELETRICA"
+  | "HIDRAULICA"
+  | "INFORMATICA"
+  | "ESTRUTURAL"
+  | "OUTROS";
+
 export interface ManagedUser extends SessionUser {
   institutionId: string;
+  specialty: UserSpecialty | null;
 }
 
 export interface ManagedUserPage {
@@ -216,6 +224,7 @@ export async function listUsers(
 export async function changeUserRole(
   userId: string,
   role: SessionUser["role"],
+  specialty?: UserSpecialty,
 ): Promise<ManagedUser> {
   const response = await fetch(
     `/api/users/${encodeURIComponent(userId)}/role`,
@@ -223,7 +232,7 @@ export async function changeUserRole(
       method: "PATCH",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, ...(specialty ? { specialty } : {}) }),
     },
   );
   const body: unknown = await response.json().catch(() => null);
@@ -361,10 +370,29 @@ function readManagedUserPage(value: unknown): ManagedUserPage | null {
 
 function readManagedUser(value: unknown): ManagedUser | null {
   const user = parseSessionUser(value);
-  if (!user || !isRecord(value) || typeof value.institutionId !== "string") {
+  if (
+    !user ||
+    !isRecord(value) ||
+    typeof value.institutionId !== "string" ||
+    (value.specialty !== null && !isUserSpecialty(value.specialty))
+  ) {
     return null;
   }
-  return { ...user, institutionId: value.institutionId };
+  return {
+    ...user,
+    institutionId: value.institutionId,
+    specialty: value.specialty,
+  };
+}
+
+function isUserSpecialty(value: unknown): value is UserSpecialty {
+  return (
+    value === "ELETRICA" ||
+    value === "HIDRAULICA" ||
+    value === "INFORMATICA" ||
+    value === "ESTRUTURAL" ||
+    value === "OUTROS"
+  );
 }
 
 function isNonnegativeInteger(value: unknown): value is number {

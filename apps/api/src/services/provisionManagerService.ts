@@ -85,6 +85,7 @@ export function createProvisionManagerService(
         }
 
         user.role = UserRole.GESTOR;
+        user.specialty = null;
         user.passwordHash = passwordHash;
         const savedUser = await transaction.save(user);
         return {

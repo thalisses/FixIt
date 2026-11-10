@@ -134,6 +134,9 @@ function createSolicitationRepository(
     async list() {
       return { solicitations, totalItems: solicitations.length };
     },
+    async listActiveMaintainers() {
+      return [];
+    },
     async findById(id) {
       return solicitations.find((candidate) => candidate.id === id) ?? null;
     },
@@ -150,6 +153,7 @@ function createSolicitationRepository(
         manager: {} as EntityManager,
         findByIdForUpdate: async (id) =>
           solicitations.find((candidate) => candidate.id === id) ?? null,
+        findActiveMaintainerForUpdate: async () => null,
         save: async (solicitationToSave) => {
           const index = solicitations.findIndex(
             (candidate) => candidate.id === solicitationToSave.id,

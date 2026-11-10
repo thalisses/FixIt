@@ -2,7 +2,7 @@ import express from "express";
 import { once } from "node:events";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { User, UserRole } from "../entities/User.js";
+import { User, UserRole, UserSpecialty } from "../entities/User.js";
 import { sessionCookieName } from "../middleware/sessionCookie.js";
 import type {
   PublicSessionUser,
@@ -30,6 +30,7 @@ function createUser(id: string, role: UserRole): User {
     cityUf: null,
     institutionId: "UEM",
     role,
+    specialty: null,
     isActive: true,
   });
   return user;
@@ -136,6 +137,7 @@ describe("user management routes", () => {
           email: client.email,
           institutionId: "UEM",
           role: UserRole.CLIENTE,
+          specialty: null,
         },
       ],
       pagination: {
@@ -173,6 +175,50 @@ describe("user management routes", () => {
       },
     });
     expect(client.role).toBe(UserRole.GESTOR);
+    expect(client.specialty).toBeNull();
+  });
+
+  it("requires and persists a valid specialty when promoting a Manutentor", async () => {
+    const manager = createUser(managerId, UserRole.GESTOR);
+    const client = createUser(clientId, UserRole.CLIENTE);
+    const baseUrl = await startServer([manager, client]);
+    const headers = {
+      cookie: `${sessionCookieName}=${manager.id}-token`,
+      origin: webOrigin,
+      "content-type": "application/json",
+    };
+
+    const missingSpecialty = await fetch(
+      `${baseUrl}/api/users/${client.id}/role`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ role: UserRole.MANUTENTOR }),
+      },
+    );
+    const assigned = await fetch(`${baseUrl}/api/users/${client.id}/role`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        role: UserRole.MANUTENTOR,
+        specialty: UserSpecialty.INFORMATICA,
+      }),
+    });
+
+    expect(missingSpecialty.status).toBe(422);
+    expect(await missingSpecialty.json()).toMatchObject({
+      error: { code: "SPECIALTY_REQUIRED" },
+    });
+    expect(assigned.status).toBe(200);
+    expect(await assigned.json()).toMatchObject({
+      data: {
+        user: {
+          id: client.id,
+          role: UserRole.MANUTENTOR,
+          specialty: UserSpecialty.INFORMATICA,
+        },
+      },
+    });
   });
 
   it("validates pagination and returns a conflict for the last Gestor", async () => {
@@ -192,7 +238,10 @@ describe("user management routes", () => {
           origin: webOrigin,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ role: UserRole.MANUTENTOR }),
+        body: JSON.stringify({
+          role: UserRole.MANUTENTOR,
+          specialty: UserSpecialty.OUTROS,
+        }),
       },
     );
 

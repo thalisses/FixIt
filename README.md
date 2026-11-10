@@ -70,6 +70,13 @@ rebaixar o último Gestor ativo. As políticas de solicitação, ativo e relató
 estão prontas para serem aplicadas quando esses módulos de domínio forem
 implementados.
 
+Ao promover um usuário a Manutentor, o Gestor deve escolher uma especialidade:
+Elétrica, Hidráulica, Informática, Estrutural ou Outros. Especialidades podem
+ser alteradas posteriormente e são removidas quando o perfil deixa de ser
+Manutentor. Manutentores já cadastrados sem especialidade continuam válidos.
+Na atribuição de uma solicitação, todos os Manutentores ativos são exibidos,
+com os que correspondem ao tipo do problema priorizados.
+
 Para provisionar o primeiro Gestor, cadastre uma conta pela interface e execute
 o comando abaixo em um terminal interativo. Ele solicita uma senha sem exibi-la
 e só pode ser usado enquanto não houver Gestor ativo:

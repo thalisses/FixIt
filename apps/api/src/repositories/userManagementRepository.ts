@@ -17,6 +17,7 @@ export function createUserManagementRepository(
           email: true,
           institutionId: true,
           role: true,
+          specialty: true,
         },
         order: { createdAt: "DESC", id: "ASC" },
         skip: (page - 1) * pageSize,

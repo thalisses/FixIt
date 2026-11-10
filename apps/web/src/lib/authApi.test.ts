@@ -67,6 +67,7 @@ describe("registration API client", () => {
           email: "ana@example.edu",
           institutionId: "UEM",
           role: "CLIENTE",
+          specialty: null,
         },
       ],
       pagination: {
@@ -102,6 +103,31 @@ describe("registration API client", () => {
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ role: "GESTOR" }),
+      });
+    });
+
+    it("sends and parses a Manutentor specialty", async () => {
+      const user = {
+        ...page.data[0],
+        role: "MANUTENTOR",
+        specialty: "INFORMATICA",
+      };
+      const fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: { user } }), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetch);
+
+      await expect(
+        changeUserRole("user-1", "MANUTENTOR", "INFORMATICA"),
+      ).resolves.toEqual(user);
+      expect(fetch).toHaveBeenCalledWith("/api/users/user-1/role", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          role: "MANUTENTOR",
+          specialty: "INFORMATICA",
+        }),
       });
     });
 

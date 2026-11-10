@@ -80,3 +80,10 @@ export const changeSolicitationPrioritySchema = z.object(
   },
   { error: "Dados da prioridade inválidos." },
 );
+
+export const assignSolicitationMaintainerSchema = z.object(
+  {
+    maintainerId: z.uuid({ error: "Manutentor inválido." }),
+  },
+  { error: "Dados de atribuição inválidos." },
+);

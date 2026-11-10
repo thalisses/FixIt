@@ -5,7 +5,7 @@ import {
   type NivelPrioridade,
   type StatusSolicitacao,
 } from "../entities/Solicitation.js";
-import { UserRole } from "../entities/User.js";
+import { User, UserRole, UserSpecialty } from "../entities/User.js";
 
 export interface SolicitationListFilters {
   status?: StatusSolicitacao;
@@ -33,6 +33,7 @@ export interface SolicitationListResult {
 export interface SolicitationTransaction {
   manager: EntityManager;
   findByIdForUpdate(id: number): Promise<Solicitation | null>;
+  findActiveMaintainerForUpdate(userId: string): Promise<User | null>;
   save(solicitation: Solicitation): Promise<Solicitation>;
 }
 
@@ -41,6 +42,7 @@ export interface SolicitationRepository {
     filters: SolicitationListFilters,
     scope: SolicitationListScope,
   ): Promise<SolicitationListResult>;
+  listActiveMaintainers(): Promise<User[]>;
   /** Detalhe com solicitante, responsável e bem carregados. */
   findById(id: number): Promise<Solicitation | null>;
   /** Atualiza só a prioridade; devolve null se a solicitação não existir. */
@@ -62,6 +64,13 @@ export function createSolicitationRepository(
   dataSource: DataSource,
 ): SolicitationRepository {
   return {
+    listActiveMaintainers() {
+      return dataSource.getRepository(User).find({
+        select: { id: true, fullName: true, specialty: true },
+        where: { role: UserRole.MANUTENTOR, isActive: true },
+      });
+    },
+
     async list(filters, scope) {
       const query = dataSource
         .getRepository(Solicitation)
@@ -167,6 +176,15 @@ export function createSolicitationRepository(
               where: { id },
               lock: { mode: "pessimistic_write" },
             }),
+          findActiveMaintainerForUpdate: (userId) =>
+            manager
+              .getRepository(User)
+              .createQueryBuilder("user")
+              .where("user.id = :userId", { userId })
+              .andWhere("user.role = :role", { role: UserRole.MANUTENTOR })
+              .andWhere("user.isActive = :isActive", { isActive: true })
+              .setLock("pessimistic_write")
+              .getOne(),
           save: (solicitation) => repository.save(solicitation),
         };
         return work(transaction);

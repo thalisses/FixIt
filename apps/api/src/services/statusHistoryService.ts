@@ -73,6 +73,10 @@ export interface StatusHistoryService {
     entry: Observation,
     manager?: EntityManager,
   ): Promise<StatusHistory>;
+  recordAssignment(
+    entry: Observation,
+    manager?: EntityManager,
+  ): Promise<StatusHistory>;
   /**
    * Observação registrada pela rota (US017): só o responsável grava, e só
    * enquanto a solicitação não foi encerrada. Nada é sobrescrito.
@@ -140,6 +144,27 @@ export function createStatusHistoryService(
           solicitacaoId,
           autorId,
           tipo: TipoRegistro.OBSERVACAO,
+          statusAnterior: null,
+          statusNovo: null,
+          descricao: text,
+        },
+        manager,
+      );
+    },
+
+    async recordAssignment({ solicitacaoId, autorId, descricao }, manager) {
+      const text = descricao.trim();
+      if (!text) {
+        throw new InvalidStatusHistoryError(
+          "A atribuição precisa identificar o Manutentor.",
+        );
+      }
+
+      return repository.create(
+        {
+          solicitacaoId,
+          autorId,
+          tipo: TipoRegistro.ATRIBUICAO,
           statusAnterior: null,
           statusNovo: null,
           descricao: text,
