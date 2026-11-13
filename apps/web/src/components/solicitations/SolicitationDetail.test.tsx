@@ -44,6 +44,7 @@ interface Backend {
   priorityPatch?(body: unknown): Detail;
   maintainers?: MaintainerCandidate[];
   assignmentPatch?(body: { maintainerId: string }): Detail;
+  cancel?(body: { motivo: string }): Detail;
 }
 
 function stubBackend({
@@ -54,6 +55,7 @@ function stubBackend({
   priorityPatch,
   maintainers = [],
   assignmentPatch,
+  cancel,
 }: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -79,6 +81,12 @@ function stubBackend({
       const body = JSON.parse(String(init.body));
       return jsonResponse({
         data: { solicitation: priorityPatch ? priorityPatch(body) : request },
+      });
+    }
+    if (url === "/api/solicitations/1/cancel" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      return jsonResponse({
+        data: { solicitation: cancel ? cancel(body) : request },
       });
     }
     if (url === "/api/solicitations/1/maintainers") {
@@ -127,13 +135,15 @@ async function mountDetail() {
 
 function setValue(selector: string, value: string) {
   const element = container.querySelector<
-    HTMLInputElement | HTMLSelectElement
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
   >(selector);
   expect(element, selector).not.toBeNull();
   const prototype =
     element instanceof HTMLSelectElement
       ? HTMLSelectElement.prototype
-      : HTMLInputElement.prototype;
+      : element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
   act(() => {
     setter?.call(element, value);
@@ -208,6 +218,31 @@ describe("SolicitationDetail", () => {
 
     expect(container.textContent).not.toContain("Iniciar atendimento");
     expect(container.textContent).not.toContain("Salvar prioridade");
+    expect(container.textContent).not.toContain("Cancelar solicitação");
+  });
+
+  it("lets a Gestor cancel an open request (US012)", async () => {
+    const fetchMock = stubBackend({
+      cancel: () => ({ ...detail, status: "CANCELADA" }),
+    });
+    await mountDetail();
+
+    setValue('textarea[name="motivo"]', "Chamado duplicado");
+    await clickButton("Cancelar solicitação");
+    expect(container.textContent).toContain("Confirmar o cancelamento");
+
+    await clickButton("Confirmar cancelamento");
+
+    const cancelCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        String(url) === "/api/solicitations/1/cancel" &&
+        init?.method === "POST",
+    );
+    expect(cancelCall).toBeDefined();
+    expect(JSON.parse(String(cancelCall?.[1]?.body))).toEqual({
+      motivo: "Chamado duplicado",
+    });
+    expect(container.textContent).toContain("Solicitação cancelada.");
   });
 
   it("lets a Gestor change the priority (US015)", async () => {

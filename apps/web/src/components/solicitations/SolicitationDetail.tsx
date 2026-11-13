@@ -3,6 +3,7 @@ import type { StatusSolicitacao } from "../../lib/assetApi";
 import {
   getSolicitation,
   assignSolicitationMaintainer,
+  cancelSolicitation,
   changeSolicitationPriority,
   changeSolicitationStatus,
   listSolicitationMaintainers,
@@ -70,6 +71,11 @@ export function SolicitationDetail({
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignmentMessage, setAssignmentMessage] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [isCancelConfirmationOpen, setIsCancelConfirmationOpen] =
+    useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   const handleRequestError = useCallback(
     (error: unknown): string => {
@@ -200,6 +206,29 @@ export function SolicitationDetail({
       setAssignmentError(handleRequestError(error));
     } finally {
       setIsAssigning(false);
+    }
+  }
+
+  async function confirmCancel() {
+    if (!cancelReason.trim()) {
+      setCancelError("Informe o motivo do cancelamento.");
+      return;
+    }
+
+    setIsCanceling(true);
+    setCancelError("");
+    setSuccessMessage("");
+    try {
+      const updated = await cancelSolicitation(id, cancelReason.trim());
+      setSolicitation(updated);
+      setCancelReason("");
+      setIsCancelConfirmationOpen(false);
+      setSuccessMessage("Solicitação cancelada.");
+    } catch (error) {
+      setCancelError(handleRequestError(error));
+      setIsCancelConfirmationOpen(false);
+    } finally {
+      setIsCanceling(false);
     }
   }
 
@@ -461,6 +490,74 @@ export function SolicitationDetail({
               {assignmentError && (
                 <p className="form-error" role="alert">
                   {assignmentError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {canManage && solicitation.status === "EM_ABERTO" && (
+            <div className="asset-card solicitation-cancel-card">
+              <h2>Cancelar solicitação</h2>
+              <p className="asset-muted">
+                O cancelamento mantém o registro no histórico e retira a
+                solicitação da fila de atendimento.
+              </p>
+              {isCancelConfirmationOpen ? (
+                <div
+                  aria-label="Confirmar cancelamento"
+                  className="solicitation-cancel-confirmation"
+                  role="group"
+                >
+                  <p>
+                    Confirmar o cancelamento desta solicitação? Esta ação não
+                    apaga o histórico.
+                  </p>
+                  <button
+                    className="primary-action solicitation-action-button"
+                    disabled={isCanceling}
+                    onClick={confirmCancel}
+                    type="button"
+                  >
+                    {isCanceling ? "Cancelando..." : "Confirmar cancelamento"}
+                  </button>
+                  <button
+                    className="text-action"
+                    disabled={isCanceling}
+                    onClick={() => setIsCancelConfirmationOpen(false)}
+                    type="button"
+                  >
+                    Voltar
+                  </button>
+                </div>
+              ) : (
+                <div className="solicitation-cancel-form">
+                  <label className="form-field">
+                    <span>Motivo do cancelamento</span>
+                    <textarea
+                      disabled={isCanceling}
+                      name="motivo"
+                      onChange={(event) => {
+                        setCancelReason(event.target.value);
+                        setCancelError("");
+                      }}
+                      placeholder="Ex.: chamado duplicado"
+                      rows={3}
+                      value={cancelReason}
+                    />
+                  </label>
+                  <button
+                    className="primary-action solicitation-action-button"
+                    disabled={!cancelReason.trim() || isCanceling}
+                    onClick={() => setIsCancelConfirmationOpen(true)}
+                    type="button"
+                  >
+                    Cancelar solicitação
+                  </button>
+                </div>
+              )}
+              {cancelError && (
+                <p className="form-error" role="alert">
+                  {cancelError}
                 </p>
               )}
             </div>

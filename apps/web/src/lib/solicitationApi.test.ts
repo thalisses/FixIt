@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assignSolicitationMaintainer,
+  cancelSolicitation,
   changeSolicitationPriority,
   changeSolicitationStatus,
   getSolicitation,
@@ -251,5 +252,27 @@ describe("solicitation Manutentor assignment API", () => {
         body: JSON.stringify({ maintainerId: "maintainer-1" }),
       }),
     );
+  });
+});
+
+
+describe("cancelSolicitation", () => {
+  it("sends the reason with POST", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        data: { solicitation: { ...detail, status: "CANCELADA" } },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await cancelSolicitation(1, "Chamado duplicado");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/solicitations/1/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ motivo: "Chamado duplicado" }),
+    });
+    expect(result.status).toBe("CANCELADA");
   });
 });
