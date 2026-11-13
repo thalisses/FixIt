@@ -77,6 +77,10 @@ export interface StatusHistoryService {
     entry: Observation,
     manager?: EntityManager,
   ): Promise<StatusHistory>;
+  recordCancellation(
+    entry: { solicitacaoId: number; autorId: string; motivo: string },
+    manager?: EntityManager,
+  ): Promise<StatusHistory>;
   /**
    * Observação registrada pela rota (US017): só o responsável grava, e só
    * enquanto a solicitação não foi encerrada. Nada é sobrescrito.
@@ -167,6 +171,27 @@ export function createStatusHistoryService(
           tipo: TipoRegistro.ATRIBUICAO,
           statusAnterior: null,
           statusNovo: null,
+          descricao: text,
+        },
+        manager,
+      );
+    },
+
+    async recordCancellation({ solicitacaoId, autorId, motivo }, manager) {
+      const text = motivo.trim();
+      if (!text) {
+        throw new InvalidStatusHistoryError(
+          "O cancelamento precisa de um motivo.",
+        );
+      }
+
+      return repository.create(
+        {
+          solicitacaoId,
+          autorId,
+          tipo: TipoRegistro.CANCELAMENTO,
+          statusAnterior: StatusSolicitacao.EM_ABERTO,
+          statusNovo: StatusSolicitacao.CANCELADA,
           descricao: text,
         },
         manager,

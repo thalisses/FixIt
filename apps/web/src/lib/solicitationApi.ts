@@ -138,6 +138,24 @@ export async function changeSolicitationPriority(
   return readDetail(body);
 }
 
+export async function cancelSolicitation(
+  id: number,
+  motivo: string,
+): Promise<SolicitationDetail> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/cancel`,
+    "Não foi possível cancelar a solicitação.",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ motivo }),
+    },
+  );
+
+  return readDetail(body);
+}
+
 export async function listSolicitationMaintainers(
   id: number,
 ): Promise<MaintainerCandidate[]> {

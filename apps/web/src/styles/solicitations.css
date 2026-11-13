@@ -409,3 +409,56 @@
     align-self: stretch;
   }
 }
+
+.solicitation-cancel-form {
+  display: flex;
+  max-width: 620px;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.solicitation-cancel-form .form-field textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  resize: vertical;
+}
+
+.solicitation-cancel-form .form-field textarea:focus {
+  border-color: #2563eb;
+  outline: 3px solid rgb(37 99 235 / 15%);
+}
+
+.solicitation-cancel-form .form-field textarea::placeholder {
+  color: #94a3b8;
+}
+
+.solicitation-cancel-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.solicitation-cancel-confirmation p {
+  width: 100%;
+  margin: 0;
+  color: #444651;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .solicitation-cancel-form .primary-action,
+  .solicitation-cancel-confirmation .primary-action,
+  .solicitation-cancel-confirmation .text-action {
+    width: 100%;
+  }
+}

@@ -32,6 +32,13 @@ export class InvalidStatusTransitionError extends Error {
   }
 }
 
+export class SolicitationNotCancelableError extends Error {
+  constructor(message = "Só solicitações em aberto podem ser canceladas.") {
+    super(message);
+    this.name = "SolicitationNotCancelableError";
+  }
+}
+
 export class StatusHistoryUnavailableError extends Error {
   constructor() {
     super("O histórico de status não está disponível.");
@@ -78,6 +85,11 @@ export interface SolicitationService {
   assignMaintainer(
     id: number,
     maintainerId: string,
+    user: Pick<PublicSessionUser, "id" | "role">,
+  ): Promise<Solicitation>;
+  cancel(
+    id: number,
+    motivo: string,
     user: Pick<PublicSessionUser, "id" | "role">,
   ): Promise<Solicitation>;
 }
@@ -221,6 +233,48 @@ export function createSolicitationService(
             solicitacaoId: id,
             autorId: user.id,
             descricao: `Responsável atribuído: ${maintainer.fullName}`,
+          },
+          transaction.manager,
+        );
+      });
+
+      const updated = await repository.findById(id);
+      if (!updated) {
+        throw new SolicitationNotFoundError();
+      }
+      return updated;
+    },
+
+    async cancel(id, motivo, user) {
+      if (!isAuthorized(user, "request:manage")) {
+        throw new ForbiddenSolicitationError();
+      }
+      if (!statusHistoryService) {
+        throw new StatusHistoryUnavailableError();
+      }
+
+      await repository.transaction(async (transaction) => {
+        const solicitation = await transaction.findByIdForUpdate(id);
+        if (!solicitation) {
+          throw new SolicitationNotFoundError();
+        }
+        if (solicitation.status === StatusSolicitacao.CONCLUIDO) {
+          throw new SolicitationNotCancelableError(
+            "Solicitações concluídas não podem ser canceladas.",
+          );
+        }
+        if (solicitation.status !== StatusSolicitacao.EM_ABERTO) {
+          throw new SolicitationNotCancelableError();
+        }
+
+        solicitation.status = StatusSolicitacao.CANCELADA;
+        solicitation.dataConclusao = null;
+        await transaction.save(solicitation);
+        await statusHistoryService.recordCancellation(
+          {
+            solicitacaoId: id,
+            autorId: user.id,
+            motivo,
           },
           transaction.manager,
         );

@@ -87,3 +87,14 @@ export const assignSolicitationMaintainerSchema = z.object(
   },
   { error: "Dados de atribuição inválidos." },
 );
+
+export const cancelSolicitationSchema = z.object(
+  {
+    motivo: z
+      .string({ error: "Informe o motivo do cancelamento." })
+      .trim()
+      .min(1, "Informe o motivo do cancelamento.")
+      .max(500, "O motivo pode ter até 500 caracteres."),
+  },
+  { error: "Dados do cancelamento inválidos." },
+);
