@@ -33,10 +33,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 interface Backend {
   role?: string;
+  count?: number;
   list?(url: string): Response;
 }
 
-function stubBackend({ role = "GESTOR", list }: Backend) {
+function stubBackend({ role = "GESTOR", count = 0, list }: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/api/sessions/current") {
@@ -50,6 +51,9 @@ function stubBackend({ role = "GESTOR", list }: Backend) {
           },
         },
       });
+    }
+    if (url === "/api/solicitations/triage-count") {
+      return jsonResponse({ data: { count } });
     }
     if (list) {
       return list(url);
@@ -124,7 +128,11 @@ async function submitFilters() {
 function lastListUrl(fetchMock: ReturnType<typeof stubBackend>): string {
   const urls = fetchMock.mock.calls
     .map(([input]) => String(input))
-    .filter((url) => url.startsWith("/api/solicitations"));
+    .filter(
+      (url) =>
+        url.startsWith("/api/solicitations") &&
+        !url.includes("triage-count"),
+    );
   return urls.at(-1) ?? "";
 }
 
@@ -192,11 +200,36 @@ describe("SolicitationsPage", () => {
     expect(lastListUrl(fetchMock)).toBe("/api/solicitations?page=1&pageSize=20");
   });
 
+  it("shows the triage count to a Gestor and opens the queue", async () => {
+    const fetchMock = stubBackend({ count: 3 });
+    await mountPage();
+
+    expect(container.textContent).toContain(
+      "3 solicitações aguardando responsável.",
+    );
+
+    await clickButton("Ver fila");
+
+    const url = lastListUrl(fetchMock);
+    expect(url).toContain("status=EM_ABERTO");
+    expect(url).toContain("semResponsavel=true");
+  });
+
+  it("shows the zero state for triage", async () => {
+    stubBackend({ count: 0 });
+    await mountPage();
+
+    expect(container.textContent).toContain(
+      "Nenhum chamado aguardando triagem.",
+    );
+  });
+
   it("shows the triage filter only for Gestor", async () => {
     stubBackend({ role: "CLIENTE" });
     await mountPage();
 
     expect(container.textContent).not.toContain("Somente sem responsável");
+    expect(container.textContent).not.toContain("Fila aguardando responsável");
   });
 
   it("navigates to the next page", async () => {

@@ -128,6 +128,13 @@ function createFakeRepository(
     async listActiveMaintainers() {
       return [];
     },
+    async countTriage() {
+      return solicitations.filter(
+        (candidate) =>
+          candidate.status === StatusSolicitacao.EM_ABERTO &&
+          candidate.responsavelId === null,
+      ).length;
+    },
     async findById(id) {
       return solicitations.find((candidate) => candidate.id === id) ?? null;
     },

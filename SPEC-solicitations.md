@@ -14,8 +14,8 @@
 | US014 — mudança de status | Concluída no PR #11 |
 | US015 — prioridade | Concluída no PR #12 |
 | US016 — atribuição de responsável | Concluída (implementação da Thalisses) |
-| US012 — cancelamento | Em implementação nesta branch |
-| US019 — triagem | Pendente |
+| US012 — cancelamento | Concluída no PR #14 |
+| US019 — triagem | Em implementação nesta branch |
 | US021 — filtros do relatório | Pendente (depende da US020) |
 
 ## Objetivo

@@ -5,6 +5,7 @@ import {
   changeSolicitationPriority,
   changeSolicitationStatus,
   getSolicitation,
+  getTriageCount,
   listSolicitations,
   listSolicitationMaintainers,
   SolicitationApiError,
@@ -274,5 +275,21 @@ describe("cancelSolicitation", () => {
       body: JSON.stringify({ motivo: "Chamado duplicado" }),
     });
     expect(result.status).toBe("CANCELADA");
+  });
+});
+
+
+describe("getTriageCount", () => {
+  it("loads the Gestor triage count", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: { count: 3 } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getTriageCount()).resolves.toBe(3);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/solicitations/triage-count",
+      { credentials: "same-origin" },
+    );
   });
 });

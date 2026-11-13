@@ -1,9 +1,9 @@
-import type { DataSource, EntityManager } from "typeorm";
+import { IsNull, type DataSource, type EntityManager } from "typeorm";
 import {
   Solicitation,
+  StatusSolicitacao,
   type AreaTecnica,
   type NivelPrioridade,
-  type StatusSolicitacao,
 } from "../entities/Solicitation.js";
 import { User, UserRole, UserSpecialty } from "../entities/User.js";
 
@@ -43,6 +43,7 @@ export interface SolicitationRepository {
     scope: SolicitationListScope,
   ): Promise<SolicitationListResult>;
   listActiveMaintainers(): Promise<User[]>;
+  countTriage(): Promise<number>;
   /** Detalhe com solicitante, responsável e bem carregados. */
   findById(id: number): Promise<Solicitation | null>;
   /** Atualiza só a prioridade; devolve null se a solicitação não existir. */
@@ -68,6 +69,15 @@ export function createSolicitationRepository(
       return dataSource.getRepository(User).find({
         select: { id: true, fullName: true, specialty: true },
         where: { role: UserRole.MANUTENTOR, isActive: true },
+      });
+    },
+
+    countTriage() {
+      return dataSource.getRepository(Solicitation).count({
+        where: {
+          status: StatusSolicitacao.EM_ABERTO,
+          responsavelId: IsNull(),
+        },
       });
     },
 
