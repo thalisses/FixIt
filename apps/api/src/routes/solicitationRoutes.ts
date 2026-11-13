@@ -41,6 +41,13 @@ export function createSolicitationRoutes(
     requireManager,
     controller.changePriority,
   );
+  router.post(
+    "/api/solicitations/:id/cancel",
+    requireAuth,
+    requireAllowedOrigin,
+    requireManager,
+    controller.cancel,
+  );
   if (statusEnabled) {
     router.patch(
       "/api/solicitations/:id/status",
