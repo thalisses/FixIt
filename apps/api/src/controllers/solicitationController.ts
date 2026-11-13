@@ -133,6 +133,34 @@ function toListItem(solicitation: Solicitation) {
 
 export function createSolicitationController(service: SolicitationService) {
   return {
+    async triage(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const user = request.authUser;
+      if (!user) {
+        response.status(401).json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Autenticação necessária.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const count = await service.getTriageCount(user);
+        response.status(200).json({ data: { count } });
+      } catch (error) {
+        if (error instanceof ForbiddenSolicitationError) {
+          sendForbidden(response);
+          return;
+        }
+        next(error);
+      }
+    },
+
     async list(
       request: Request,
       response: Response,

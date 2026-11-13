@@ -21,6 +21,12 @@ export function createSolicitationRoutes(
 
   router.get("/api/solicitations", requireAuth, controller.list);
   router.get(
+    "/api/solicitations/triage-count",
+    requireAuth,
+    requireManager,
+    controller.triage,
+  );
+  router.get(
     "/api/solicitations/:id/maintainers",
     requireAuth,
     requireManager,

@@ -68,6 +68,9 @@ export interface SolicitationService {
     id: number,
     user: Pick<PublicSessionUser, "id" | "role">,
   ): Promise<Solicitation>;
+  getTriageCount(
+    user: Pick<PublicSessionUser, "id" | "role">,
+  ): Promise<number>;
   changeStatus(
     id: number,
     status: StatusSolicitacao,
@@ -145,6 +148,13 @@ export function createSolicitationService(
         role: user.role,
         userId: user.id,
       });
+    },
+
+    async getTriageCount(user) {
+      if (!isAuthorized(user, "request:manage")) {
+        throw new ForbiddenSolicitationError();
+      }
+      return repository.countTriage();
     },
 
     async get(id, user) {
