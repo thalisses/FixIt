@@ -190,6 +190,21 @@ export async function assignSolicitationMaintainer(
   return readDetail(body);
 }
 
+export async function getTriageCount(): Promise<number> {
+  const body = await request(
+    "/api/solicitations/triage-count",
+    "Não foi possível carregar a triagem.",
+  );
+  if (
+    !isRecord(body) ||
+    !isRecord(body.data) ||
+    typeof body.data.count !== "number"
+  ) {
+    throw invalidResponse();
+  }
+  return body.data.count;
+}
+
 export async function listSolicitations(
   filters: SolicitationFilters = {},
 ): Promise<SolicitationPage> {

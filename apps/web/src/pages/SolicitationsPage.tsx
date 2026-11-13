@@ -6,6 +6,7 @@ import {
 } from "../components/solicitations/SolicitationFilters";
 import { SolicitationDetail } from "../components/solicitations/SolicitationDetail";
 import { SolicitationList } from "../components/solicitations/SolicitationList";
+import { TriageCard } from "../components/solicitations/TriageCard";
 import { useAuth } from "../context/AuthContext";
 import {
   listSolicitations,
@@ -130,6 +131,15 @@ export function SolicitationsPage({
     setPage(1);
   }
 
+  function showTriageQueue() {
+    setFilters({
+      ...emptySolicitationFilters,
+      status: "EM_ABERTO",
+      semResponsavel: true,
+    });
+    setPage(1);
+  }
+
   if (route.name === "detail") {
     return (
       <AppShell
@@ -166,6 +176,8 @@ export function SolicitationsPage({
             <span>{totalItems === 1 ? "registro" : "registros"}</span>
           </div>
         </div>
+
+        {isGestor && <TriageCard onShowQueue={showTriageQueue} />}
 
         <SolicitationFiltersForm
           applied={filters}
