@@ -10,6 +10,45 @@ export interface CreateSolicitationInput {
   urgencia: NivelUrgencia;
 }
 
+export interface SolicitationAttachmentMetadata {
+  id: string;
+  nomeOriginal: string;
+  mimeType: string;
+  tamanhoBytes: number;
+  criadoEm: string;
+  contentUrl: string;
+}
+
+export async function uploadSolicitationAttachments(
+  id: number,
+  idempotencyKey: string,
+  files: readonly File[],
+): Promise<SolicitationAttachmentMetadata[]> {
+  const form = new FormData();
+  for (const file of files) form.append("images", file, file.name);
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/attachments`,
+    "Não foi possível enviar as imagens.",
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: form,
+    },
+  );
+  if (!isRecord(body) || !Array.isArray(body.data) || body.data.length !== files.length || !body.data.every(isAttachmentMetadata)) {
+    throw new SolicitationApiError(200, "INVALID_RESPONSE", "Não foi possível confirmar os dados das imagens enviadas.");
+  }
+  return body.data;
+}
+
+function isAttachmentMetadata(value: unknown): value is SolicitationAttachmentMetadata {
+  return isRecord(value) && typeof value.id === "string" && typeof value.nomeOriginal === "string" &&
+    ["image/jpeg", "image/png", "image/webp"].includes(String(value.mimeType)) &&
+    typeof value.tamanhoBytes === "number" && Number.isInteger(value.tamanhoBytes) && value.tamanhoBytes > 0 &&
+    typeof value.criadoEm === "string" && typeof value.contentUrl === "string";
+}
+
 export async function createSolicitation(
   input: CreateSolicitationInput,
 ): Promise<SolicitationDetail> {
