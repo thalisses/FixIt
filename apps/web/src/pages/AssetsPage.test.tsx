@@ -724,7 +724,7 @@ describe("AssetsPage navigation", () => {
         (link) => link.textContent,
       );
 
-    expect(links()).toEqual(["Início", "Solicitações", "Patrimônio"]);
+    expect(links()).toEqual(["Início", "Nova solicitação", "Solicitações", "Patrimônio"]);
 
     act(() => root.unmount());
     root = createRoot(container);
@@ -733,6 +733,7 @@ describe("AssetsPage navigation", () => {
 
     expect(links()).toEqual([
       "Início",
+      "Nova solicitação",
       "Solicitações",
       "Patrimônio",
       "Usuários",

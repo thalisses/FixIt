@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createDataSource } from "./database.js";
 import { Asset } from "../entities/Asset.js";
 import { Solicitation } from "../entities/Solicitation.js";
+import { SolicitationAttachment } from "../entities/SolicitationAttachment.js";
+import { AttachmentUploadBatch } from "../entities/AttachmentUploadBatch.js";
+import { CreateAttachmentUploadBatches1794700000000 } from "../migrations/1794700000000-CreateAttachmentUploadBatches.js";
+import { CreateSolicitationAttachments1794690000000 } from "../migrations/1794690000000-CreateSolicitationAttachments.js";
 import { StatusHistory } from "../entities/StatusHistory.js";
 import { AuthSession } from "../entities/AuthSession.js";
 import { User } from "../entities/User.js";
@@ -14,6 +18,19 @@ import { AddSolicitationListIndexes1793985000000 } from "../migrations/179398500
 import { AddUserSpecialty1794050000000 } from "../migrations/1794050000000-AddUserSpecialty.js";
 
 describe("createDataSource", () => {
+  it("registers idempotency batches and the new migration after the applied attachment migration", () => {
+    const source = createDataSource("postgresql://localhost/fixit");
+    expect(source.options.entities).toContain(AttachmentUploadBatch);
+    expect(source.options.migrations).toEqual(expect.arrayContaining([CreateAttachmentUploadBatches1794700000000]));
+    const migrations = source.options.migrations as Function[];
+    expect(migrations.indexOf(CreateAttachmentUploadBatches1794700000000)).toBeGreaterThan(migrations.indexOf(CreateSolicitationAttachments1794690000000));
+  });
+  it("registers attachment metadata and its migration without schema synchronization", () => {
+    const dataSource = createDataSource("postgresql://localhost/fixit");
+    expect(dataSource.options.synchronize).toBe(false);
+    expect(dataSource.options.entities).toContain(SolicitationAttachment);
+    expect(dataSource.options.migrations).toContain(CreateSolicitationAttachments1794690000000);
+  });
   it("registers authentication entities and migration without schema synchronization", () => {
     const dataSource = createDataSource("postgresql://localhost/fixit");
 

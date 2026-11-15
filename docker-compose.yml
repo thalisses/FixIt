@@ -26,10 +26,13 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       PORT: 3000
+      UPLOAD_DIR: /app/uploads
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
       DATABASE_URL: postgresql://${POSTGRES_USER:-fixit}:${POSTGRES_PASSWORD:-fixit_local_only}@db:5432/${POSTGRES_DB:-fixit}
     ports:
       - "${API_PORT:-3000}:3000"
+    volumes:
+      - attachment_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -60,3 +63,4 @@ services:
 
 volumes:
   postgres_data:
+  attachment_data:

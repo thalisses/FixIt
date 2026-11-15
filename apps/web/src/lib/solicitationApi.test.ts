@@ -8,6 +8,7 @@ import {
   getTriageCount,
   listSolicitations,
   listSolicitationMaintainers,
+  uploadSolicitationAttachments,
   SolicitationApiError,
   type SolicitationDetail,
   type SolicitationListItem,
@@ -53,6 +54,31 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("uploadSolicitationAttachments", () => {
+  const metadata = { id: "attachment-1", nomeOriginal: "problem.png", mimeType: "image/png", tamanhoBytes: 5, criadoEm: "2026-11-15T12:00:00Z", contentUrl: "/api/solicitations/7/attachments/attachment-1/content" };
+  it("sends repeated images and the UUID header with credentials, without setting Content-Type", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ data: [metadata, { ...metadata, id: "attachment-2" }] }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    const files = [new File(["first"], "problem.png", { type: "image/png" }), new File(["other"], "other.webp", { type: "image/webp" })];
+    const result = await uploadSolicitationAttachments(7, "11111111-1111-4111-8111-111111111111", files);
+    expect(result).toHaveLength(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/solicitations/7/attachments");
+    expect(init).toMatchObject({ method: "POST", credentials: "same-origin", headers: { "Idempotency-Key": "11111111-1111-4111-8111-111111111111" } });
+    expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+    expect((init?.body as FormData).getAll("images").map((file) => (file as File).name)).toEqual(["problem.png", "other.webp"]);
+    expect(Array.from((init?.body as FormData).keys())).toEqual(["images", "images"]);
+  });
+  it("preserves API codes and field errors", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: { code: "VALIDATION_ERROR", message: "Imagem inválida.", fields: { images: "Imagem corrompida." } } }, 422)));
+    await expect(uploadSolicitationAttachments(7, "key", [new File(["x"], "x.png")])).rejects.toMatchObject({ status: 422, code: "VALIDATION_ERROR", fields: { images: "Imagem corrompida." } });
+  });
+  it("does not accept incomplete success responses as confirmation", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ data: [] }, 201)));
+    await expect(uploadSolicitationAttachments(7, "key", [new File(["x"], "x.png")])).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
 });
 
 describe("listSolicitations", () => {

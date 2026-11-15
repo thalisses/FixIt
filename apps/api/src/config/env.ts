@@ -1,8 +1,11 @@
+import { isAbsolute, resolve } from "node:path";
+
 export interface AppEnvironment {
   port: number;
   databaseUrl: string;
   webOrigin: string;
   isProduction: boolean;
+  uploadDir: string;
 }
 
 export function loadEnvironment(
@@ -32,7 +35,13 @@ export function loadEnvironment(
   const isProduction = source.NODE_ENV === "production";
   const webOrigin = loadWebOrigin(source.WEB_ORIGIN, isProduction);
 
-  return { port, databaseUrl, webOrigin, isProduction };
+  const configuredUploadDir = source.UPLOAD_DIR?.trim();
+  if (source.UPLOAD_DIR !== undefined && (!configuredUploadDir || configuredUploadDir.includes("\0") || !isAbsolute(configuredUploadDir))) {
+    throw new Error("UPLOAD_DIR must be a nonempty absolute path.");
+  }
+  if (isProduction && !configuredUploadDir) throw new Error("UPLOAD_DIR is required in production.");
+  const uploadDir = configuredUploadDir ?? resolve("uploads");
+  return { port, databaseUrl, webOrigin, isProduction, uploadDir };
 }
 
 function loadWebOrigin(value: string | undefined, isProduction: boolean): string {
