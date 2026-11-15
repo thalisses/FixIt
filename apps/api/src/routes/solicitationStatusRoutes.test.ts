@@ -258,6 +258,43 @@ function patchStatus(
   });
 }
 
+describe("US011 — list after a status change (in-memory persistence)", () => {
+  it("returns the current status when the requester lists again after a Gestor update", async () => {
+    const requests = [solicitation(1)];
+    const repository = createSolicitationRepository(requests);
+    const historyRepository = createStatusHistoryRepository(requests);
+    const baseUrl = await startServer(repository, historyRepository);
+    const headers = { Cookie: `fixit_session=${sessionToken}` };
+
+    loggedUser.id = requester.id;
+    loggedUser.role = UserRole.CLIENTE;
+    const before = await fetch(`${baseUrl}/api/solicitations`, { headers });
+    expect(before.status).toBe(200);
+    expect((await before.json()).data).toEqual([
+      expect.objectContaining({ id: 1, status: "EM_ABERTO", solicitante: { id: requester.id, fullName: requester.fullName } }),
+    ]);
+
+    loggedUser.id = "11111111-1111-4111-8111-111111111111";
+    loggedUser.role = UserRole.GESTOR;
+    const updated = await patchStatus(baseUrl, 1, "EM_ATENDIMENTO");
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).data.solicitation.status).toBe("EM_ATENDIMENTO");
+
+    loggedUser.id = requester.id;
+    loggedUser.role = UserRole.CLIENTE;
+    const after = await fetch(`${baseUrl}/api/solicitations`, { headers });
+    expect(after.status).toBe(200);
+    expect((await after.json()).data).toEqual([
+      expect.objectContaining({ id: 1, status: "EM_ATENDIMENTO", solicitante: { id: requester.id, fullName: requester.fullName } }),
+    ]);
+    expect(historyRepository.entries).toMatchObject([{
+      tipo: TipoRegistro.MUDANCA_STATUS,
+      statusAnterior: "EM_ABERTO", statusNovo: "EM_ATENDIMENTO",
+      autorId: "11111111-1111-4111-8111-111111111111",
+    }]);
+  });
+});
+
 describe("GET /api/solicitations/:id", () => {
   it("lets a Gestor see the full details", async () => {
     const requests = [solicitation(1)];
