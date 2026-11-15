@@ -49,6 +49,39 @@ function isAttachmentMetadata(value: unknown): value is SolicitationAttachmentMe
     typeof value.criadoEm === "string" && typeof value.contentUrl === "string";
 }
 
+export async function listSolicitationAttachments(
+  id: number,
+  signal?: AbortSignal,
+): Promise<SolicitationAttachmentMetadata[]> {
+  const body = await request(
+    `/api/solicitations/${encodeURIComponent(id)}/attachments`,
+    "Não foi possível carregar os anexos da solicitação.",
+    { credentials: "same-origin", signal },
+  );
+  if (!isRecord(body) || !Array.isArray(body.data) || !body.data.every(isAttachmentMetadata)) {
+    throw invalidResponse();
+  }
+  return body.data.map(({ id, nomeOriginal, mimeType, tamanhoBytes, criadoEm, contentUrl }) => ({
+    id, nomeOriginal, mimeType, tamanhoBytes, criadoEm, contentUrl,
+  }));
+}
+
+export async function getSolicitationAttachmentContent(
+  id: number,
+  attachmentId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(
+    `/api/solicitations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}/content`,
+    { credentials: "same-origin", signal },
+  );
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw responseError(response.status, body, "Não foi possível carregar a imagem.");
+  }
+  return response.blob();
+}
+
 export async function createSolicitation(
   input: CreateSolicitationInput,
 ): Promise<SolicitationDetail> {
@@ -369,19 +402,23 @@ async function request(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = isRecord(body) && isRecord(body.error) ? body.error : {};
-    throw new SolicitationApiError(
-      response.status,
-      typeof error.code === "string" ? error.code : "REQUEST_FAILED",
-      typeof error.message === "string" ? error.message : fallbackMessage,
-      readFields(error.fields),
-    );
+    throw responseError(response.status, body, fallbackMessage);
   }
 
   if (!isRecord(body)) {
     throw invalidResponse();
   }
   return body;
+}
+
+function responseError(status: number, body: unknown, fallbackMessage: string): SolicitationApiError {
+  const error = isRecord(body) && isRecord(body.error) ? body.error : {};
+  return new SolicitationApiError(
+    status,
+    typeof error.code === "string" ? error.code : "REQUEST_FAILED",
+    typeof error.message === "string" ? error.message : fallbackMessage,
+    readFields(error.fields),
+  );
 }
 
 function readDetail(body: unknown): SolicitationDetail {
