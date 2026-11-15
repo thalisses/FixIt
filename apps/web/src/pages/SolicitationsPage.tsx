@@ -5,6 +5,7 @@ import {
   SolicitationFiltersForm,
 } from "../components/solicitations/SolicitationFilters";
 import { SolicitationDetail } from "../components/solicitations/SolicitationDetail";
+import { SolicitationForm } from "../components/solicitations/SolicitationForm";
 import { SolicitationList } from "../components/solicitations/SolicitationList";
 import { TriageCard } from "../components/solicitations/TriageCard";
 import { useAuth } from "../context/AuthContext";
@@ -24,9 +25,10 @@ interface SolicitationsPageProps {
   onNavigate(path: string): void;
 }
 
-type SolicitationsRoute = { name: "list" } | { name: "detail"; id: number };
+type SolicitationsRoute = { name: "list" } | { name: "create" } | { name: "detail"; id: number };
 
 export function parseSolicitationsRoute(path: string): SolicitationsRoute {
+  if (path === "/solicitations/new") return { name: "create" };
   const match = /^\/solicitations\/(\d+)$/.exec(path);
   return match ? { name: "detail", id: Number(match[1]) } : { name: "list" };
 }
@@ -39,6 +41,7 @@ export function SolicitationsPage({
   const { user, refresh } = useAuth();
   const route = parseSolicitationsRoute(path);
   const detailId = route.name === "detail" ? route.id : null;
+  const isCreating = route.name === "create";
   const [filters, setFilters] = useState<SolicitationFilters>(
     emptySolicitationFilters,
   );
@@ -65,7 +68,7 @@ export function SolicitationsPage({
   );
 
   useEffect(() => {
-    if (detailId !== null) {
+    if (detailId !== null || isCreating) {
       setIsLoading(false);
       setErrorMessage("");
       return undefined;
@@ -104,7 +107,7 @@ export function SolicitationsPage({
     return () => {
       isCurrent = false;
     };
-  }, [detailId, filters, page, reloadCount, handleRequestError]);
+  }, [detailId, isCreating, filters, page, reloadCount, handleRequestError]);
 
   if (!user) {
     return null;
@@ -140,6 +143,23 @@ export function SolicitationsPage({
     setPage(1);
   }
 
+  if (route.name === "create") {
+    return (
+      <AppShell activePath={path} onLoggedOut={onLoggedOut} onNavigate={onNavigate}>
+        <SolicitationForm
+          onBack={() => onNavigate("/solicitations")}
+          onRequestError={(error) => {
+            // Mantém o rascunho visível se a sessão expirar durante o envio.
+            if (error instanceof SolicitationApiError && error.status === 401) {
+              return "Sua sessão expirou. Entre novamente em outra aba e tente enviar novamente.";
+            }
+            return handleRequestError(error);
+          }}
+        />
+      </AppShell>
+    );
+  }
+
   if (route.name === "detail") {
     return (
       <AppShell
@@ -171,6 +191,7 @@ export function SolicitationsPage({
                 : "Acompanhe as solicitações disponíveis para o seu perfil."}
             </p>
           </div>
+          <button className="primary-action solicitation-action-button" type="button" onClick={() => onNavigate("/solicitations/new")}>Nova solicitação</button>
           <div className="solicitation-count" aria-live="polite">
             <strong>{totalItems}</strong>
             <span>{totalItems === 1 ? "registro" : "registros"}</span>

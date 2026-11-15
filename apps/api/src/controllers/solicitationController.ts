@@ -15,6 +15,7 @@ import {
   changeSolicitationStatusSchema,
   assignSolicitationMaintainerSchema,
   cancelSolicitationSchema,
+  createSolicitationSchema,
   solicitationListQuerySchema,
 } from "../validators/solicitationValidators.js";
 
@@ -133,6 +134,47 @@ function toListItem(solicitation: Solicitation) {
 
 export function createSolicitationController(service: SolicitationService) {
   return {
+    async create(
+      request: Request,
+      response: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      const parsed = createSolicitationSchema.safeParse(request.body);
+      if (!parsed.success) {
+        sendValidationError(response, parsed.error, "Dados da solicitação inválidos.");
+        return;
+      }
+
+      const user = request.authUser;
+      if (!user) {
+        response.status(401).json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Autenticação necessária.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const solicitation = await service.create(parsed.data, user);
+        response.status(201).json({
+          data: {
+            solicitation: {
+              ...toDetail(solicitation),
+              solicitante: { id: user.id, fullName: user.fullName },
+            },
+          },
+        });
+      } catch (error) {
+        if (error instanceof ForbiddenSolicitationError) {
+          sendForbidden(response);
+          return;
+        }
+        next(error);
+      }
+    },
+
     async triage(
       request: Request,
       response: Response,

@@ -2,8 +2,29 @@ import { z } from "zod";
 import {
   AreaTecnica,
   NivelPrioridade,
+  NivelUrgencia,
   StatusSolicitacao,
 } from "../entities/Solicitation.js";
+
+export const createSolicitationSchema = z.strictObject(
+  {
+    local: z
+      .string({ error: "Local é obrigatório." })
+      .trim()
+      .min(1, "Local é obrigatório."),
+    tipoProblema: z.enum(AreaTecnica, {
+      error: "Tipo de problema inválido.",
+    }),
+    descricaoProblema: z
+      .string({ error: "Descrição do problema é obrigatória." })
+      .trim()
+      .min(1, "Descrição do problema é obrigatória."),
+    urgencia: z.enum(NivelUrgencia, { error: "Urgência inválida." }),
+  },
+  { error: "Dados da solicitação inválidos." },
+);
+
+export type CreateSolicitationInput = z.infer<typeof createSolicitationSchema>;
 
 const INVALID_PAGE = "Paginação inválida.";
 const INVALID_PAGE_SIZE = "O tamanho da página deve estar entre 1 e 100.";

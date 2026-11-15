@@ -20,6 +20,12 @@ export function createSolicitationRoutes(
   const requireManager = createRequireRole(UserRole.GESTOR);
 
   router.get("/api/solicitations", requireAuth, controller.list);
+  router.post(
+    "/api/solicitations",
+    requireAuth,
+    requireAllowedOrigin,
+    controller.create,
+  );
   router.get(
     "/api/solicitations/triage-count",
     requireAuth,

@@ -16,7 +16,10 @@ import {
   SolicitationNotFoundError,
   type StatusHistoryService,
 } from "./statusHistoryService.js";
-import type { SolicitationListQuery } from "../validators/solicitationValidators.js";
+import type {
+  CreateSolicitationInput,
+  SolicitationListQuery,
+} from "../validators/solicitationValidators.js";
 
 export class ForbiddenSolicitationError extends Error {
   constructor() {
@@ -60,6 +63,10 @@ export interface MaintainerCandidate {
 }
 
 export interface SolicitationService {
+  create(
+    input: CreateSolicitationInput,
+    user: Pick<PublicSessionUser, "id" | "role">,
+  ): Promise<Solicitation>;
   list(
     query: SolicitationListQuery,
     user: Pick<PublicSessionUser, "id" | "role">,
@@ -137,6 +144,38 @@ export function createSolicitationService(
   statusHistoryService?: StatusHistoryService,
 ): SolicitationService {
   return {
+    async create(input, user) {
+      if (!isAuthorized(user, "request:create")) {
+        throw new ForbiddenSolicitationError();
+      }
+      if (!statusHistoryService) {
+        throw new StatusHistoryUnavailableError();
+      }
+
+      return repository.transaction(async (transaction) => {
+        const solicitation = new Solicitation();
+        solicitation.local = input.local;
+        solicitation.tipoProblema = input.tipoProblema;
+        solicitation.descricaoProblema = input.descricaoProblema;
+        solicitation.urgencia = input.urgencia;
+        solicitation.solicitanteId = user.id;
+        solicitation.status = StatusSolicitacao.EM_ABERTO;
+        solicitation.prioridade = null;
+        solicitation.responsavelId = null;
+        solicitation.dataConclusao = null;
+        solicitation.setorResponsavel = null;
+        solicitation.observacoes = null;
+        solicitation.bemId = null;
+
+        const created = await transaction.save(solicitation);
+        await statusHistoryService.recordOpening(
+          { solicitacaoId: created.id, autorId: user.id },
+          transaction.manager,
+        );
+        return created;
+      });
+    },
+
     list(query, user) {
       const filters: SolicitationListFilters = {
         ...query,
