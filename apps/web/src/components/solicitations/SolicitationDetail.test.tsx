@@ -45,6 +45,9 @@ interface Backend {
   maintainers?: MaintainerCandidate[];
   assignmentPatch?(body: { maintainerId: string }): Detail;
   cancel?(body: { motivo: string }): Detail;
+  read?(id: number): Response | Promise<Response>;
+  attachments?(id: number): Response | Promise<Response>;
+  imageContent?(): Response | Promise<Response>;
 }
 
 function stubBackend({
@@ -56,6 +59,9 @@ function stubBackend({
   maintainers = [],
   assignmentPatch,
   cancel,
+  read,
+  attachments,
+  imageContent,
 }: Backend) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -107,6 +113,15 @@ function stubBackend({
     if (url === "/api/solicitations/1/history") {
       return jsonResponse({ data: [] });
     }
+    const attachmentList = /^\/api\/solicitations\/(\d+)\/attachments$/.exec(url);
+    if (attachmentList) {
+      return attachments ? attachments(Number(attachmentList[1])) : jsonResponse({ data: [] });
+    }
+    if (/^\/api\/solicitations\/\d+\/attachments\/[^/]+\/content$/.test(url)) {
+      return imageContent ? imageContent() : new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "image/png" } });
+    }
+    const detailRoute = /^\/api\/solicitations\/(\d+)$/.exec(url);
+    if (detailRoute && read) return read(Number(detailRoute[1]));
     if (url === "/api/solicitations/1") {
       return jsonResponse({ data: { solicitation: request } });
     }
@@ -122,11 +137,11 @@ async function settle() {
   });
 }
 
-async function mountDetail() {
+async function mountDetail(id = 1, onBack = () => {}) {
   act(() => {
     root.render(
       <AuthProvider>
-        <SolicitationDetail id={1} onBack={() => {}} />
+        <SolicitationDetail id={id} onBack={onBack} />
       </AuthProvider>,
     );
   });
@@ -165,6 +180,11 @@ async function clickButton(label: string) {
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  let nextUrl = 0;
+  vi.stubGlobal("URL", class extends URL {
+    static createObjectURL = vi.fn(() => `blob:detail-${++nextUrl}`);
+    static revokeObjectURL = vi.fn();
+  });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -177,6 +197,204 @@ afterEach(() => {
 });
 
 describe("SolicitationDetail", () => {
+  const image = {
+    id: "image-1", nomeOriginal: "evidencia.png", mimeType: "image/png", tamanhoBytes: 3,
+    criadoEm: "2026-11-07T12:00:00.000Z",
+    contentUrl: "/api/solicitations/1/attachments/image-1/content",
+  };
+
+  function fact(label: string) {
+    const term = Array.from(container.querySelectorAll("dt")).find((entry) => entry.textContent === label);
+    expect(term, label).toBeDefined();
+    return term?.nextElementSibling?.textContent;
+  }
+
+  it("shows exactly Acesso Negado for a Cliente receiving 403, without request data or child requests", async () => {
+    const fetchMock = stubBackend({
+      role: "CLIENTE", userId: "other-client",
+      read: () => jsonResponse({ error: { code: "FORBIDDEN", message: "Mensagem da API." } }, 403),
+    });
+    await mountDetail();
+    expect(container.querySelector("h1")?.textContent).toBe("Acesso Negado");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Você não tem permissão para visualizar esta solicitação.");
+    expect(container.textContent).not.toContain(detail.local);
+    expect(container.textContent).not.toContain(detail.descricaoProblema);
+    expect(container.textContent).not.toContain(detail.solicitante!.fullName);
+    expect(container.querySelector(".solicitation-attachments")).toBeNull();
+    expect(container.textContent).not.toContain("Iniciar atendimento");
+    expect(container.textContent).not.toContain("Salvar prioridade");
+    expect(container.textContent).not.toContain("Histórico");
+    expect(fetchMock.mock.calls.some(([url]) => /\/(attachments|history)(\/|$)/.test(String(url)))).toBe(false);
+    expect(container.textContent).not.toContain("Tentar novamente");
+  });
+
+  it("keeps the expired-session message and revalidates the session for HTTP 401", async () => {
+    const fetchMock = stubBackend({
+      role: "CLIENTE",
+      read: () => jsonResponse({ error: { code: "UNAUTHENTICATED", message: "Sessão inválida." } }, 401),
+    });
+    await mountDetail();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Sua sessão expirou. Entre novamente.");
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/sessions/current")).toHaveLength(2);
+    expect(container.textContent).not.toContain("Acesso Negado");
+    expect(container.querySelector(".solicitation-attachments")).toBeNull();
+  });
+
+  it("distinguishes a missing solicitation from forbidden access", async () => {
+    stubBackend({ read: () => jsonResponse({ error: { code: "SOLICITATION_NOT_FOUND", message: "Não encontrada." } }, 404) });
+    await mountDetail();
+    expect(container.querySelector("h1")?.textContent).toBe("Solicitação não encontrada");
+    expect(container.textContent).not.toContain("Acesso Negado");
+    expect(container.querySelector(".solicitation-attachments")).toBeNull();
+    expect(container.textContent).not.toContain("Tentar novamente");
+  });
+
+  it.each(["network", "500", "503"])("allows retry after a %s failure", async (failure) => {
+    let attempts = 0;
+    stubBackend({ read: () => {
+      if (++attempts > 1) return jsonResponse({ data: { solicitation: detail } });
+      if (failure === "network") throw new TypeError("Failed to fetch");
+      return jsonResponse({ error: { code: "UNAVAILABLE", message: "Serviço indisponível. Tente novamente." } }, Number(failure));
+    } });
+    await mountDetail();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(failure === "network"
+      ? "Não foi possível conectar ao servidor. Tente novamente."
+      : "Serviço indisponível. Tente novamente.");
+    expect(container.textContent).not.toContain("Acesso Negado");
+    await clickButton("Tentar novamente");
+    expect(container.querySelector("h1")?.textContent).toBe(detail.local);
+    expect(container.querySelector(".solicitation-attachments")).not.toBeNull();
+  });
+
+  it.each(["list", "content"])("does not turn an isolated attachment %s 403 into denied solicitation access", async (failure) => {
+    const forbidden = () => jsonResponse({ error: { code: "FORBIDDEN", message: "Sem acesso à imagem." } }, 403);
+    stubBackend({
+      attachments: () => failure === "list" ? forbidden() : jsonResponse({ data: [image] }),
+      imageContent: forbidden,
+    });
+    await mountDetail();
+    expect(container.querySelector("h1")?.textContent).toBe(detail.local);
+    expect(container.querySelector('.solicitation-attachments [role="alert"]')?.textContent).toContain("Sem acesso à imagem.");
+    expect(container.textContent).not.toContain("Acesso Negado");
+    expect(fact("Solicitante")).toBe(detail.solicitante!.fullName);
+  });
+
+  it("ignores a late forbidden response after navigating to another ID", async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => { finish = resolve; });
+    stubBackend({ role: "CLIENTE", read: (id) => id === 1 ? pending : jsonResponse({ data: { solicitation: { ...detail, id: 2, local: "Bloco D" } } }) });
+    await mountDetail(1);
+    await mountDetail(2);
+    await act(async () => { finish(jsonResponse({ error: { code: "FORBIDDEN", message: "Chamado anterior." } }, 403)); });
+    expect(container.querySelector("h1")?.textContent).toBe("Bloco D");
+    expect(container.textContent).not.toContain("Acesso Negado");
+    expect(container.textContent).not.toContain("Chamado anterior");
+  });
+
+  it("clears an existing denied state while the next solicitation is loading", async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => { finish = resolve; });
+    stubBackend({ role: "CLIENTE", read: (id) => id === 2 ? pending : jsonResponse({ error: { code: "FORBIDDEN", message: "Não." } }, 403) });
+    await mountDetail(1);
+    expect(container.querySelector("h1")?.textContent).toBe("Acesso Negado");
+    await mountDetail(2);
+    expect(container.textContent).toContain("Carregando solicitação");
+    expect(container.textContent).not.toContain("Acesso Negado");
+    await act(async () => { finish(jsonResponse({ data: { solicitation: { ...detail, id: 2 } } })); });
+    expect(container.querySelector("h1")?.textContent).toBe(detail.local);
+  });
+
+  it.each([403, 404, 500])("preserves the return action in the HTTP %s error state", async (status) => {
+    stubBackend({ read: () => jsonResponse({ error: { code: "FAILED", message: "Falha." } }, status) });
+    const onBack = vi.fn();
+    await mountDetail(1, onBack);
+    await clickButton("Voltar para Solicitações");
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows every CA1 field and attachments from the authorized request", async () => {
+    stubBackend({
+      request: { ...detail, responsavel: { id: "user-3", fullName: "Carla Lima" } },
+      attachments: () => jsonResponse({ data: [image] }),
+    });
+    await mountDetail();
+    expect(container.querySelector("h1")?.textContent).toBe(detail.local);
+    expect(container.querySelector(".solicitation-detail-subtitle")?.textContent).toContain("Informática");
+    expect(fact("Solicitante")).toBe("Bruno Souza");
+    expect(fact("Abertura")).toContain("07/11/2026");
+    expect(fact("Abertura")).toContain("09:00");
+    expect(fact("Responsável")).toBe("Carla Lima");
+    expect(fact("Urgência declarada")).toBe("Alta");
+    expect(fact("Prioridade de atendimento")).toBe("Média");
+    expect(container.querySelector(".asset-page-heading")?.textContent).toContain("Em aberto");
+    expect(container.querySelector(".solicitation-asset-detail")?.textContent).toContain("PAT-7");
+    expect(container.querySelector(".solicitation-asset-detail")?.textContent).toContain("Projetor Epson");
+    expect(container.textContent).toContain("Projetor não liga");
+    expect(container.querySelector(".solicitation-attachments img")?.getAttribute("alt")).toContain(image.nomeOriginal);
+  });
+
+  it("explains priority, assignee and asset not yet defined", async () => {
+    stubBackend({ request: { ...detail, prioridade: null, responsavel: null, bem: null } });
+    await mountDetail();
+    expect(fact("Prioridade de atendimento")).toBe("Não definida");
+    expect(fact("Responsável")).toBe("Não atribuído");
+    expect(container.textContent).toContain("Esta solicitação não está vinculada a um bem patrimonial.");
+    expect(container.textContent).toContain("Esta solicitação não possui anexos.");
+  });
+
+  it("shows attachments for the owning Cliente without querying the timeline", async () => {
+    const fetchMock = stubBackend({ role: "CLIENTE", userId: "user-2", attachments: () => jsonResponse({ data: [image] }) });
+    await mountDetail();
+    expect(container.querySelector(".solicitation-attachments img")).not.toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === image.contentUrl)).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/history"))).toBe(false);
+    expect(container.textContent).not.toContain("Salvar prioridade");
+  });
+
+  it.each([403, 404])("does not mount or fetch the gallery when details return HTTP %s", async (status) => {
+    const fetchMock = stubBackend({ read: () => jsonResponse({ error: { code: "FAILED", message: "Consulta recusada." } }, status) });
+    await mountDetail();
+    expect(container.querySelector(".solicitation-attachments")).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/attachments"))).toBe(false);
+  });
+
+  it.each(["list", "content"])("keeps request data visible when attachment %s fails", async (failure) => {
+    stubBackend({
+      attachments: () => failure === "list"
+        ? jsonResponse({ error: { code: "FAILED", message: "Falha nos anexos." } }, 500)
+        : jsonResponse({ data: [image] }),
+      imageContent: () => jsonResponse({ error: { code: "ATTACHMENT_READ_FAILED", message: "Falha na imagem." } }, 500),
+    });
+    await mountDetail();
+    expect(container.querySelector("h1")?.textContent).toBe(detail.local);
+    expect(fact("Solicitante")).toBe("Bruno Souza");
+    expect(container.textContent).toContain(detail.descricaoProblema);
+    expect(container.querySelector('.solicitation-attachments [role="alert"]')).not.toBeNull();
+  });
+
+  it("waits for successful details before fetching attachments and uses the new ID after navigation", async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => { finish = resolve; });
+    const fetchMock = stubBackend({
+      role: "CLIENTE", userId: "user-2",
+      read: (id) => id === 2 ? pending : jsonResponse({ data: { solicitation: detail } }),
+      attachments: (id) => jsonResponse({ data: [{ ...image, id: `image-${id}`, nomeOriginal: `chamado-${id}.png` }] }),
+    });
+    await mountDetail();
+    expect(container.textContent).toContain("chamado-1.png");
+    const oldSignal = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/attachments/image-1/content"))?.[1]?.signal;
+    await mountDetail(2);
+    expect(container.textContent).toContain("Carregando solicitação");
+    expect(container.textContent).not.toContain("chamado-1.png");
+    expect(oldSignal?.aborted).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/solicitations/2/attachments")).toBe(false);
+    await act(async () => { finish(jsonResponse({ data: { solicitation: { ...detail, id: 2, local: "Bloco D" } } })); });
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("Bloco D");
+    expect(container.textContent).toContain("chamado-2.png");
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === "/api/solicitations/2/attachments/image-2/content")).toBe(true);
+  });
+
   it("shows the request data and the timeline fields", async () => {
     stubBackend({});
     await mountDetail();

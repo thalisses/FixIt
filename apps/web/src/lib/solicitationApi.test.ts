@@ -5,8 +5,10 @@ import {
   changeSolicitationPriority,
   changeSolicitationStatus,
   getSolicitation,
+  getSolicitationAttachmentContent,
   getTriageCount,
   listSolicitations,
+  listSolicitationAttachments,
   listSolicitationMaintainers,
   uploadSolicitationAttachments,
   SolicitationApiError,
@@ -78,6 +80,118 @@ describe("uploadSolicitationAttachments", () => {
   it("does not accept incomplete success responses as confirmation", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ data: [] }, 201)));
     await expect(uploadSolicitationAttachments(7, "key", [new File(["x"], "x.png")])).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+});
+
+describe("attachment reading API", () => {
+  const metadata = {
+    id: "11111111-1111-4111-8111-111111111111",
+    nomeOriginal: "problema.png",
+    mimeType: "image/png",
+    tamanhoBytes: 4,
+    criadoEm: "2026-11-15T12:00:00Z",
+    contentUrl: "/api/solicitations/7/attachments/11111111-1111-4111-8111-111111111111/content",
+  };
+
+  it("lists public metadata using the session and cancellation signal", async () => {
+    const signal = new AbortController().signal;
+    const fetchMock = vi.fn(async () => jsonResponse({
+      data: [{ ...metadata, storageKey: "internal-only", physicalPath: "/private/file" }],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listSolicitationAttachments(7, signal)).resolves.toEqual([metadata]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/solicitations/7/attachments", {
+      credentials: "same-origin", signal,
+    });
+  });
+
+  it("accepts a solicitation without attachments", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ data: [] })));
+    await expect(listSolicitationAttachments(7)).resolves.toEqual([]);
+  });
+
+  it.each([{ data: null }, { data: [{}] }, { data: [{ ...metadata, mimeType: "text/html" }] }])(
+    "rejects malformed metadata: %j", async (body) => {
+      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(body)));
+      await expect(listSolicitationAttachments(7)).rejects.toMatchObject({
+        name: "SolicitationApiError", code: "INVALID_RESPONSE",
+      });
+    },
+  );
+
+  it.each(["image/jpeg", "image/png", "image/webp"])("returns original binary bytes and MIME for %s", async (mimeType) => {
+    const bytes = new Uint8Array([0, 127, 128, 255]);
+    const signal = new AbortController().signal;
+    const fetchMock = vi.fn(async () => new Response(bytes, { headers: { "Content-Type": mimeType } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const blob = await getSolicitationAttachmentContent(7, metadata.id, signal);
+    expect(blob.type).toBe(mimeType);
+    expect(blob).toBeInstanceOf(Blob);
+    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(blob);
+    });
+    expect(new Uint8Array(buffer)).toEqual(bytes);
+    expect(fetchMock).toHaveBeenCalledWith(metadata.contentUrl, { credentials: "same-origin", signal });
+  });
+
+  it("encodes attachment identifiers instead of accepting arbitrary content URLs", async () => {
+    const fetchMock = vi.fn(async () => new Response("image"));
+    vi.stubGlobal("fetch", fetchMock);
+    await getSolicitationAttachmentContent(7, "a/b?token=x");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/solicitations/7/attachments/a%2Fb%3Ftoken%3Dx/content",
+      { credentials: "same-origin", signal: undefined },
+    );
+  });
+
+  describe.each([
+    ["list", () => listSolicitationAttachments(7)],
+    ["content", () => getSolicitationAttachmentContent(7, metadata.id)],
+  ] as const)("%s errors", (_operation, load) => {
+    it.each([
+      [401, "UNAUTHENTICATED"], [403, "FORBIDDEN"], [404, "ATTACHMENT_NOT_FOUND"],
+      [422, "VALIDATION_ERROR"], [500, "ATTACHMENT_READ_FAILED"], [503, "UNAVAILABLE"],
+    ])("preserves HTTP %s and API error details", async (status, code) => {
+      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({
+        error: { code, message: "Falha informada pela API.", fields: { id: "ID inválido." } },
+      }, status)));
+      await expect(load()).rejects.toMatchObject({
+        name: "SolicitationApiError", status, code,
+        message: "Falha informada pela API.", fields: { id: "ID inválido." },
+      });
+    });
+
+    it("preserves the HTTP status when the error body is not JSON", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 502 })));
+      await expect(load()).rejects.toMatchObject({
+        name: "SolicitationApiError", status: 502, code: "REQUEST_FAILED", fields: {},
+      });
+    });
+
+    it("propagates network failures", async () => {
+      const error = new TypeError("Failed to fetch");
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+      await expect(load()).rejects.toBe(error);
+    });
+  });
+
+  it.each(["list", "content"])("cancels an in-flight %s request without converting AbortError", async (operation) => {
+    const controller = new AbortController();
+    const error = new DOMException("Cancelled", "AbortError");
+    vi.stubGlobal("fetch", vi.fn((_url: unknown, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(error), { once: true });
+    })));
+    const pending = operation === "list"
+      ? listSolicitationAttachments(7, controller.signal)
+      : getSolicitationAttachmentContent(7, metadata.id, controller.signal);
+    const assertion = expect(pending).rejects.toBe(error);
+    controller.abort();
+    await assertion;
   });
 });
 
