@@ -1,0 +1,41 @@
+# Exclusivo para scripts/test-attachments-postgres.ps1. Sem portas ou volumes externos.
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: fixit_us009_integration
+      POSTGRES_USER: fixit_it
+      POSTGRES_PASSWORD: integration-only-password
+    volumes:
+      - test_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fixit_it -d fixit_us009_integration"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api-test:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME}-api-test
+    command: ["npm", "test", "--workspace", "@fixit/api", "--", "src/integration/attachments.postgres.test.ts"]
+    environment:
+      FIXIT_ATTACHMENT_INTEGRATION: "1"
+      FIXIT_ATTACHMENT_PHASE: ${FIXIT_ATTACHMENT_PHASE:-write}
+      FIXIT_ATTACHMENT_TEST_PROJECT: ${COMPOSE_PROJECT_NAME}
+      ATTACHMENT_TEST_DATABASE_URL: postgresql://fixit_it:integration-only-password@db:5432/fixit_us009_integration
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - test_attachments:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  test_postgres:
+  test_attachments:
+
+networks:
+  default:
+    internal: true
