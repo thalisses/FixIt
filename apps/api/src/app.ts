@@ -1,4 +1,8 @@
 import express, { type ErrorRequestHandler, type Express } from "express";
+import { createSolicitationAttachmentRoutes } from "./routes/solicitationAttachmentRoutes.js";
+import { createSolicitationAttachmentService } from "./services/solicitationAttachmentService.js";
+import type { SolicitationAttachmentRepository } from "./repositories/solicitationAttachmentRepository.js";
+import type { AttachmentStorage } from "./storage/attachmentStorage.js";
 import type { AssetRepository } from "./repositories/assetRepository.js";
 import type { SolicitationRepository } from "./repositories/solicitationRepository.js";
 import { createAssetRoutes } from "./routes/assetRoutes.js";
@@ -39,6 +43,7 @@ export function createApp(
   assetRepository?: AssetRepository,
   statusHistoryRepository?: StatusHistoryRepository,
   solicitationRepository?: SolicitationRepository,
+  attachments?: { repository: SolicitationAttachmentRepository; storage: AttachmentStorage },
 ): Express {
   const app = express();
 
@@ -92,6 +97,13 @@ export function createApp(
         Boolean(statusHistoryService),
       ),
     );
+  }
+  if (attachments) {
+    app.use(createSolicitationAttachmentRoutes(
+      createSolicitationAttachmentService(attachments.repository, attachments.storage),
+      sessionService,
+      options.webOrigin,
+    ));
   }
   app.use(apiErrorHandler);
 

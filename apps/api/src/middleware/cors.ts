@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 
 const allowedMethods = "GET, POST, PATCH, DELETE, OPTIONS";
-const allowedHeaders = "Content-Type";
+const allowedHeaders = "Content-Type, Idempotency-Key";
 
 export function createCorsMiddleware(webOrigin: string): RequestHandler {
   return (request, response, next) => {

@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { createSolicitationAttachmentRepository } from "./repositories/solicitationAttachmentRepository.js";
+import { createLocalAttachmentStorage } from "./storage/localAttachmentStorage.js";
 import { createDataSource } from "./config/database.js";
 import { loadEnvironment } from "./config/env.js";
 import { AuthSession } from "./entities/AuthSession.js";
@@ -42,6 +44,7 @@ async function startServer(): Promise<void> {
     createAssetRepository(dataSource),
     createStatusHistoryRepository(dataSource),
     createSolicitationRepository(dataSource),
+    { repository: createSolicitationAttachmentRepository(dataSource), storage: createLocalAttachmentStorage(environment.uploadDir) },
   ).listen(
     environment.port,
     "0.0.0.0",
