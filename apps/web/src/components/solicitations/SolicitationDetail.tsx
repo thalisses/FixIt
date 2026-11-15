@@ -27,6 +27,7 @@ import {
   UrgencyBadge,
 } from "./solicitationPresentation";
 import { SolicitationTimeline } from "./SolicitationTimeline";
+import { SolicitationAttachments } from "./SolicitationAttachments";
 
 interface SolicitationDetailProps {
   id: number;
@@ -45,7 +46,11 @@ function nextStatusOf(
   return null;
 }
 
-export function SolicitationDetail({
+export function SolicitationDetail(props: SolicitationDetailProps) {
+  return <SolicitationDetailContent key={props.id} {...props} />;
+}
+
+function SolicitationDetailContent({
   id,
   onBack,
 }: SolicitationDetailProps) {
@@ -56,6 +61,7 @@ export function SolicitationDetail({
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [detailErrorStatus, setDetailErrorStatus] = useState<number | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingStatus, setPendingStatus] = useState<StatusSolicitacao | null>(
     null,
@@ -95,6 +101,7 @@ export function SolicitationDetail({
     let isCurrent = true;
     setIsLoading(true);
     setErrorMessage("");
+    setDetailErrorStatus(null);
 
     void getSolicitation(id)
       .then((result) => {
@@ -104,6 +111,7 @@ export function SolicitationDetail({
       })
       .catch((error: unknown) => {
         if (isCurrent) {
+          setDetailErrorStatus(error instanceof SolicitationApiError ? error.status : null);
           setErrorMessage(handleRequestError(error));
         }
       })
@@ -263,18 +271,27 @@ export function SolicitationDetail({
 
       {errorMessage ? (
         <div className="management-error">
+          {(detailErrorStatus === 403 || detailErrorStatus === 404) && (
+            <h1 id="solicitation-detail-title">
+              {detailErrorStatus === 403 ? "Acesso Negado" : "Solicitação não encontrada"}
+            </h1>
+          )}
           <p className="form-error" role="alert">
-            {errorMessage}
+            {detailErrorStatus === 403
+              ? "Você não tem permissão para visualizar esta solicitação."
+              : detailErrorStatus === 404
+                ? "A solicitação não existe ou não está mais disponível."
+                : errorMessage}
           </p>
-          <button
+          {detailErrorStatus !== 403 && detailErrorStatus !== 404 && <button
             className="text-action"
             onClick={() => setReloadCount((current) => current + 1)}
             type="button"
           >
             Tentar novamente
-          </button>
+          </button>}
         </div>
-      ) : isLoading || !solicitation ? (
+      ) : isLoading || !solicitation || solicitation.id !== id ? (
         <div className="asset-loading" role="status" aria-busy="true">
           Carregando solicitação...
         </div>
@@ -622,6 +639,8 @@ export function SolicitationDetail({
               )}
             </div>
           )}
+
+          <SolicitationAttachments solicitationId={solicitation.id} />
 
           <SolicitationTimeline
             responsavelId={solicitation.responsavel?.id ?? null}
