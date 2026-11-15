@@ -45,6 +45,11 @@ export function navItemsFor(role: SessionUser["role"]): NavItem[] {
   return [
     { path: "/", label: "Início", icon: <HomeIcon /> },
     {
+      path: "/solicitations/new",
+      label: "Nova solicitação",
+      icon: <SolicitationIcon />,
+    },
+    {
       path: "/solicitations",
       label: "Solicitações",
       icon: <SolicitationIcon />,
@@ -59,6 +64,9 @@ export function navItemsFor(role: SessionUser["role"]): NavItem[] {
 }
 
 function sectionOf(path: string): string {
+  if (path === "/solicitations/new") {
+    return "/solicitations/new";
+  }
   if (path.startsWith("/solicitations")) {
     return "/solicitations";
   }

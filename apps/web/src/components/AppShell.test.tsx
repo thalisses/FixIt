@@ -101,8 +101,46 @@ describe("AppShell menu", () => {
 
     expect(navLinks().map((link) => link.textContent)).toEqual([
       "Início",
+      "Nova solicitação",
       "Solicitações",
     ]);
+  });
+
+  it.each(["CLIENTE", "MANUTENTOR", "GESTOR"])("offers creation after Home for %s", async (role) => {
+    stubSession(role);
+    const { onNavigate } = await mountShell("/");
+    const links = navLinks();
+    expect(links.slice(0, 3).map((link) => link.textContent)).toEqual([
+      "Início", "Nova solicitação", "Solicitações",
+    ]);
+    expect(links[1].getAttribute("href")).toBe("/solicitations/new");
+    act(() => links[1].click());
+    expect(onNavigate).toHaveBeenCalledWith("/solicitations/new");
+  });
+
+  it("marks only creation as current on its route", async () => {
+    stubSession();
+    await mountShell("/solicitations/new");
+    expect(navLinks().filter((link) => link.getAttribute("aria-current") === "page")
+      .map((link) => link.textContent)).toEqual(["Nova solicitação"]);
+    expect(document.title).toBe("Nova solicitação | FixIt");
+  });
+
+  it("navigates to creation and closes the mobile drawer", async () => {
+    stubSession();
+    const { onNavigate } = await mountShell("/");
+    const menuButton = container.querySelector<HTMLButtonElement>(".app-menu-button")!;
+    act(() => menuButton.click());
+    expect(menuButton.getAttribute("aria-expanded")).toBe("true");
+    act(() => navLinks().find((link) => link.textContent === "Nova solicitação")!.click());
+    expect(onNavigate).toHaveBeenCalledWith("/solicitations/new");
+    expect(menuButton.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps the list selected when viewing a solicitation", async () => {
+    stubSession();
+    await mountShell("/solicitations/7");
+    expect(navLinks().find((link) => link.getAttribute("aria-current"))?.textContent).toBe("Solicitações");
   });
 
   it("expands when the mouse comes near and closes after it leaves", async () => {
@@ -221,11 +259,11 @@ describe("Início", () => {
     expect(shortcuts()).toEqual(expected);
   });
 
-  it("tells a Cliente what is still coming", async () => {
+  it("tells a Cliente how to create a solicitation", async () => {
     await mountHome("CLIENTE");
 
     expect(container.querySelector(".home-note")?.textContent).toContain(
-      "abertura de solicitações",
+      "Nova solicitação",
     );
   });
 });

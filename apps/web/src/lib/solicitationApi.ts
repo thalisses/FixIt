@@ -3,6 +3,29 @@ import type { AreaTecnica, StatusSolicitacao } from "./assetApi";
 export type NivelUrgencia = "BAIXA" | "MEDIA" | "ALTA";
 export type NivelPrioridade = "BAIXA" | "MEDIA" | "ALTA";
 
+export interface CreateSolicitationInput {
+  local: string;
+  tipoProblema: AreaTecnica;
+  descricaoProblema: string;
+  urgencia: NivelUrgencia;
+}
+
+export async function createSolicitation(
+  input: CreateSolicitationInput,
+): Promise<SolicitationDetail> {
+  const { local, tipoProblema, descricaoProblema, urgencia } = input;
+  return readDetail(await request(
+    "/api/solicitations",
+    "Não foi possível criar a solicitação.",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ local, tipoProblema, descricaoProblema, urgencia }),
+    },
+  ));
+}
+
 export interface SolicitationUser {
   id: string;
   fullName: string;

@@ -34,6 +34,7 @@ export interface SolicitationTransaction {
   manager: EntityManager;
   findByIdForUpdate(id: number): Promise<Solicitation | null>;
   findActiveMaintainerForUpdate(userId: string): Promise<User | null>;
+  /** Insere entidades novas ou atualiza existentes usando o manager da transação. */
   save(solicitation: Solicitation): Promise<Solicitation>;
 }
 
@@ -51,7 +52,7 @@ export interface SolicitationRepository {
     id: number,
     prioridade: NivelPrioridade,
   ): Promise<Solicitation | null>;
-  /** Transação com lock pessimista para mudanças de estado. */
+  /** Transação para criação e alterações; oferece lock pessimista para registros existentes. */
   transaction<T>(
     work: (transaction: SolicitationTransaction) => Promise<T>,
   ): Promise<T>;

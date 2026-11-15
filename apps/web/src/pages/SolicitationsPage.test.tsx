@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../context/AuthContext";
 import type { SolicitationListItem } from "../lib/solicitationApi";
-import { SolicitationsPage } from "./SolicitationsPage";
+import { parseSolicitationsRoute, SolicitationsPage } from "./SolicitationsPage";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -245,6 +245,27 @@ describe("SolicitationsPage", () => {
     await clickButton("Próxima página");
 
     expect(lastListUrl(fetchMock)).toContain("page=2");
+  });
+
+  it.each(["CLIENTE", "MANUTENTOR", "GESTOR"])("opens creation for %s without fetching the list", async (role) => {
+    const fetchMock = stubBackend({ role });
+    act(() => {
+      root.render(
+        <AuthProvider>
+          <SolicitationsPage path="/solicitations/new" onLoggedOut={() => {}} onNavigate={() => {}} />
+        </AuthProvider>,
+      );
+    });
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("Nova solicitação");
+    expect(container.querySelectorAll("[required]")).toHaveLength(4);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(["/api/sessions/current"]);
+  });
+
+  it("distinguishes creation, detail and list routes", () => {
+    expect(parseSolicitationsRoute("/solicitations/new")).toEqual({ name: "create" });
+    expect(parseSolicitationsRoute("/solicitations/7")).toEqual({ name: "detail", id: 7 });
+    expect(parseSolicitationsRoute("/solicitations")).toEqual({ name: "list" });
   });
 
   it("shows an error with a retry action", async () => {

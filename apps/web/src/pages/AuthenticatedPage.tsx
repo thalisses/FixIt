@@ -114,8 +114,8 @@ export function AuthenticatedPage({
 
         {user.role === "CLIENTE" && (
           <p className="home-note">
-            A abertura de solicitações de manutenção ainda está em
-            desenvolvimento. Quando estiver pronta, ela aparece aqui e no menu.
+            Para registrar um problema de manutenção, acesse Solicitações e
+            selecione Nova solicitação.
           </p>
         )}
       </section>
