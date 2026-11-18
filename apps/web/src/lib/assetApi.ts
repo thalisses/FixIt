@@ -74,6 +74,38 @@ export async function listAssets(busca = ""): Promise<Asset[]> {
   return data;
 }
 
+/** Bem para escolher ao abrir uma solicitação: só o que o Cliente recebe (US008). */
+export interface AssetOption {
+  id: number;
+  codigoPatrimonial: string;
+  descricao: string;
+}
+
+/**
+ * Busca bens por código ou descrição para o formulário de solicitação (US008, CA1).
+ * Aceita a resposta mínima do Cliente, ao contrário de `listAssets`. Sem termo, não consulta.
+ */
+export async function searchAssetOptions(busca: string): Promise<AssetOption[]> {
+  const term = busca.trim();
+  if (!term) {
+    return [];
+  }
+  const data = await request(
+    `/api/assets?busca=${encodeURIComponent(term)}`,
+    { credentials: "same-origin" },
+    "Não foi possível buscar os bens.",
+  );
+
+  if (!Array.isArray(data) || !data.every(isAssetOption)) {
+    throw invalidResponse();
+  }
+  return data.map(({ id, codigoPatrimonial, descricao }) => ({
+    id,
+    codigoPatrimonial,
+    descricao,
+  }));
+}
+
 export async function createAsset(input: NewAssetInput): Promise<Asset> {
   return readAsset(
     await request(
@@ -179,6 +211,15 @@ function isAsset(value: unknown): value is Asset {
     typeof value.descricao === "string" &&
     typeof value.localizacao === "string" &&
     typeof value.estadoConservacao === "string"
+  );
+}
+
+function isAssetOption(value: unknown): value is AssetOption {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.codigoPatrimonial === "string" &&
+    typeof value.descricao === "string"
   );
 }
 

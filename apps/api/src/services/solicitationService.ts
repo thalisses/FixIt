@@ -152,7 +152,7 @@ export function createSolicitationService(
         throw new StatusHistoryUnavailableError();
       }
 
-      return repository.transaction(async (transaction) => {
+      const created = await repository.transaction(async (transaction) => {
         const solicitation = new Solicitation();
         solicitation.local = input.local;
         solicitation.tipoProblema = input.tipoProblema;
@@ -165,15 +165,22 @@ export function createSolicitationService(
         solicitation.dataConclusao = null;
         solicitation.setorResponsavel = null;
         solicitation.observacoes = null;
-        solicitation.bemId = null;
+        // US008: a chave estrangeira do banco recusa bem inexistente.
+        solicitation.bemId = input.bemId ?? null;
 
-        const created = await transaction.save(solicitation);
+        const saved = await transaction.save(solicitation);
         await statusHistoryService.recordOpening(
-          { solicitacaoId: created.id, autorId: user.id },
+          { solicitacaoId: saved.id, autorId: user.id },
           transaction.manager,
         );
-        return created;
+        return saved;
       });
+
+      if (created.bemId === null) {
+        return created;
+      }
+      // O save grava só o bemId; a releitura traz o bem para a resposta (CA1).
+      return (await repository.findById(created.id)) ?? created;
     },
 
     list(query, user) {

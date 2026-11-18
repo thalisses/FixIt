@@ -6,6 +6,9 @@ import {
   StatusSolicitacao,
 } from "../entities/Solicitation.js";
 
+const MAX_POSTGRES_INTEGER = 2147483647;
+const INVALID_ASSET = "Bem patrimonial inválido.";
+
 export const createSolicitationSchema = z.strictObject(
   {
     local: z
@@ -20,6 +23,14 @@ export const createSolicitationSchema = z.strictObject(
       .trim()
       .min(1, "Descrição do problema é obrigatória."),
     urgencia: z.enum(NivelUrgencia, { error: "Urgência inválida." }),
+    // US008: vínculo opcional. Ausente ou null abre a solicitação sem bem (CA2).
+    bemId: z
+      .number({ error: INVALID_ASSET })
+      .int(INVALID_ASSET)
+      .positive(INVALID_ASSET)
+      .max(MAX_POSTGRES_INTEGER, INVALID_ASSET)
+      .nullable()
+      .optional(),
   },
   { error: "Dados da solicitação inválidos." },
 );
@@ -29,7 +40,6 @@ export type CreateSolicitationInput = z.infer<typeof createSolicitationSchema>;
 const INVALID_PAGE = "Paginação inválida.";
 const INVALID_PAGE_SIZE = "O tamanho da página deve estar entre 1 e 100.";
 const INVALID_DATE_RANGE = "A data inicial não pode ser posterior à final.";
-const MAX_POSTGRES_INTEGER = 2147483647;
 const MAX_PAGE_SIZE = 100;
 
 const optionalPage = z.coerce

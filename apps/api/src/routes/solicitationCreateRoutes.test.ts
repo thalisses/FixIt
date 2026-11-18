@@ -3,11 +3,15 @@ import type { Server } from "node:http";
 import type { EntityManager } from "typeorm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
+import { Asset } from "../entities/Asset.js";
 import { AuthSession } from "../entities/AuthSession.js";
 import { Solicitation, StatusSolicitacao } from "../entities/Solicitation.js";
 import { StatusHistory, TipoRegistro } from "../entities/StatusHistory.js";
 import { User, UserRole } from "../entities/User.js";
-import type { SolicitationRepository } from "../repositories/solicitationRepository.js";
+import {
+  SolicitationAssetNotFoundError,
+  type SolicitationRepository,
+} from "../repositories/solicitationRepository.js";
 import type { NewStatusHistory, StatusHistoryRepository } from "../repositories/statusHistoryRepository.js";
 import type { SessionRepository } from "../services/sessionService.js";
 import type { UserRepository } from "../services/userService.js";
@@ -43,6 +47,12 @@ async function setup(role = UserRole.CLIENTE) {
   });
   const solicitations: Solicitation[] = [];
   const history: NewStatusHistory[] = [];
+  // US008: bens que "existem"; outro bemId simula a recusa da chave estrangeira.
+  const assets = [Object.assign(new Asset(), {
+    id: 7,
+    codigoPatrimonial: "PAT-7",
+    descricao: "Projetor Epson",
+  })];
   const manager = {} as EntityManager;
   let pendingHistory: NewStatusHistory[] = [];
   // Simulação de commit/rollback em memória: não comprova rollback PostgreSQL.
@@ -58,6 +68,9 @@ async function setup(role = UserRole.CLIENTE) {
       findByIdForUpdate: async () => null,
       findActiveMaintainerForUpdate: async () => null,
       save: async (entry) => {
+        if (entry.bemId !== null && !assets.some((asset) => asset.id === entry.bemId)) {
+          throw new SolicitationAssetNotFoundError();
+        }
         const saved = await save(entry);
         pendingSolicitations.push(saved);
         return saved;
@@ -77,11 +90,17 @@ async function setup(role = UserRole.CLIENTE) {
     },
     listActiveMaintainers: async () => [],
     countTriage: async () => solicitations.length,
-    findById: async (id) => solicitations.find((entry) => entry.id === id) ?? null,
+    findById: async (id) => {
+      const entry = solicitations.find((candidate) => candidate.id === id);
+      return entry
+        ? Object.assign(entry, { bem: assets.find((asset) => asset.id === entry.bemId) ?? null })
+        : null;
+    },
     updatePriority: async () => null,
     transaction: runTransaction,
   };
   const transaction = vi.spyOn(repository, "transaction");
+  const findById = vi.spyOn(repository, "findById");
   const createHistory = vi.fn<StatusHistoryRepository["create"]>(async (entry, receivedManager) => {
     expect(receivedManager).toBe(manager);
     pendingHistory.push(entry);
@@ -123,7 +142,9 @@ async function setup(role = UserRole.CLIENTE) {
       body: JSON.stringify(input),
     });
   }
-  return { user, solicitations, history, manager, save, transaction, createHistory, post, url };
+  return {
+    user, solicitations, history, manager, save, transaction, findById, createHistory, post, url,
+  };
 }
 
 describe("US007 — POST /api/solicitations", () => {
@@ -242,5 +263,56 @@ describe("US007 — POST /api/solicitations", () => {
     expect((await context.post()).status).toBe(500);
     expect(context.createHistory).not.toHaveBeenCalled();
     expect(context.solicitations).toEqual([]);
+  });
+});
+
+describe("US008: POST /api/solicitations with an optional asset", () => {
+  it("links the selected asset and returns it in the response (CA1)", async () => {
+    const context = await setup();
+    const response = await context.post({ ...validInput, bemId: 7 });
+    expect(response.status).toBe(201);
+    expect((await response.json()).data.solicitation.bem).toEqual({
+      id: 7, codigoPatrimonial: "PAT-7", descricao: "Projetor Epson",
+    });
+    expect(context.solicitations).toHaveLength(1);
+    expect(context.solicitations[0].bemId).toBe(7);
+    expect(context.history).toEqual([
+      expect.objectContaining({ solicitacaoId: 1, tipo: TipoRegistro.ABERTURA }),
+    ]);
+  });
+
+  it.each([undefined, null])("creates without an asset when bemId is %s (CA2)", async (bemId) => {
+    const context = await setup();
+    const response = await context.post({ ...validInput, bemId });
+    expect(response.status).toBe(201);
+    expect((await response.json()).data.solicitation.bem).toBeNull();
+    expect(context.solicitations[0].bemId).toBeNull();
+    expect(context.history).toHaveLength(1);
+    expect(context.findById).not.toHaveBeenCalled();
+  });
+
+  it.each(["7", 0, -1, 1.5, 2147483648, true])("rejects bemId = %s with a field error", async (bemId) => {
+    const context = await setup();
+    const response = await context.post({ ...validInput, bemId });
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.fields.bemId).toBe("Bem patrimonial inválido.");
+    expect(context.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an asset that does not exist without recording anything", async () => {
+    const context = await setup();
+    const response = await context.post({ ...validInput, bemId: 99 });
+    expect(response.status).toBe(422);
+    expect((await response.json()).error).toEqual({
+      code: "VALIDATION_ERROR",
+      message: "Bem patrimonial não encontrado.",
+      fields: { bemId: "Bem patrimonial não encontrado." },
+    });
+    expect(context.save).not.toHaveBeenCalled();
+    expect(context.createHistory).not.toHaveBeenCalled();
+    expect(context.solicitations).toEqual([]);
+    expect(context.history).toEqual([]);
   });
 });

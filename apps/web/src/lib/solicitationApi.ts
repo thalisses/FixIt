@@ -8,6 +8,8 @@ export interface CreateSolicitationInput {
   tipoProblema: AreaTecnica;
   descricaoProblema: string;
   urgencia: NivelUrgencia;
+  /** US008: bem escolhido; ausente ou null abre sem bem. */
+  bemId?: number | null;
 }
 
 export interface SolicitationAttachmentMetadata {
@@ -85,7 +87,9 @@ export async function getSolicitationAttachmentContent(
 export async function createSolicitation(
   input: CreateSolicitationInput,
 ): Promise<SolicitationDetail> {
-  const { local, tipoProblema, descricaoProblema, urgencia } = input;
+  const { local, tipoProblema, descricaoProblema, urgencia, bemId } = input;
+  // O bemId só vai no corpo quando há bem escolhido (US008).
+  const asset = bemId == null ? {} : { bemId };
   return readDetail(await request(
     "/api/solicitations",
     "Não foi possível criar a solicitação.",
@@ -93,7 +97,7 @@ export async function createSolicitation(
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ local, tipoProblema, descricaoProblema, urgencia }),
+      body: JSON.stringify({ local, tipoProblema, descricaoProblema, urgencia, ...asset }),
     },
   ));
 }

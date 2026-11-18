@@ -9,6 +9,8 @@ import {
   type SolicitationFieldErrors,
 } from "../../lib/solicitationApi";
 import { markChangesSaved, useUnsavedChanges } from "../../lib/unsavedChanges";
+import type { AssetOption } from "../../lib/assetApi";
+import { SolicitationAssetPicker } from "./SolicitationAssetPicker";
 import { SolicitationAttachmentPicker } from "./SolicitationAttachmentPicker";
 
 const emptyValues = { local: "", tipoProblema: "", descricaoProblema: "", urgencia: "" };
@@ -29,6 +31,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
   const [isSaving, setIsSaving] = useState(false);
   const [created, setCreated] = useState<SolicitationDetail | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [asset, setAsset] = useState<AssetOption | null>(null);
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "uploaded" | "failed" | "uncertain">("idle");
   const [uploadError, setUploadError] = useState("");
   const batchRef = useRef<{ key: string; files: readonly File[] } | null>(null);
@@ -36,7 +39,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
   const formRef = useRef<HTMLFormElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
   useUnsavedChanges(
-    (!created && (Object.values(values).some(Boolean) || files.length > 0)) ||
+    (!created && (Object.values(values).some(Boolean) || files.length > 0 || asset !== null)) ||
     Boolean(created && batchRef.current && uploadState !== "uploaded"),
   );
 
@@ -88,6 +91,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
         tipoProblema: values.tipoProblema as CreateSolicitationInput["tipoProblema"],
         descricaoProblema: values.descricaoProblema.trim(),
         urgencia: values.urgencia as CreateSolicitationInput["urgencia"],
+        bemId: asset?.id ?? null,
       });
       batchRef.current = batch;
       setCreated(result);
@@ -136,6 +140,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
           className="primary-action solicitation-action-button" type="button" disabled={isSaving}
           onClick={() => void retryImages()}>Tentar enviar as imagens novamente</button>}
         <p>Local: {created.local}</p>
+        <p>Bem: {created.bem ? `${created.bem.codigoPatrimonial}, ${created.bem.descricao}` : "não informado"}</p>
         <p>Status: <StatusBadge status={created.status} /></p>
         <p>Urgência: <UrgencyBadge urgency={created.urgencia} /></p>
         <button className="primary-action solicitation-action-button" type="button" disabled={isSaving} onClick={onBack}>Voltar para solicitações</button>
@@ -151,7 +156,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
         <p>Descreva o problema para registrar um chamado de manutenção.</p>
       </div></div>
       <form ref={formRef} className="asset-card asset-form solicitation-create-form" noValidate onSubmit={submit} aria-busy={isSaving}>
-        <p className="field-help">Os quatro campos abaixo são obrigatórios. As fotos são opcionais.</p>
+        <p className="field-help">Os quatro primeiros campos são obrigatórios. O bem e as fotos são opcionais.</p>
         {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
         <fieldset disabled={isSaving} className="solicitation-create-fields">
           <legend>Dados da solicitação</legend>
@@ -172,6 +177,16 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
             </div>
           ))}
         </fieldset>
+        <SolicitationAssetPicker
+          value={asset}
+          disabled={isSaving}
+          error={errors.bemId}
+          onChange={(next) => {
+            setAsset(next);
+            // Trocar o bem invalida o erro que a API devolveu para o anterior.
+            setErrors(({ bemId: _previous, ...rest }) => rest);
+          }}
+        />
         <SolicitationAttachmentPicker files={files} onChange={setFiles} disabled={isSaving} />
         <div className="asset-form-actions">
           <button className="text-action" disabled={isSaving} type="button" onClick={onBack}>Cancelar</button>

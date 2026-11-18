@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { Solicitation } from "../entities/Solicitation.js";
+import { SolicitationAssetNotFoundError } from "../repositories/solicitationRepository.js";
 import {
   ForbiddenSolicitationError,
   InvalidStatusTransitionError,
@@ -169,6 +170,17 @@ export function createSolicitationController(service: SolicitationService) {
       } catch (error) {
         if (error instanceof ForbiddenSolicitationError) {
           sendForbidden(response);
+          return;
+        }
+        if (error instanceof SolicitationAssetNotFoundError) {
+          // 422 no campo, para o formulário mostrar o erro junto da busca do bem.
+          response.status(422).json({
+            error: {
+              code: "VALIDATION_ERROR",
+              message: error.message,
+              fields: { bemId: error.message },
+            },
+          });
           return;
         }
         next(error);
