@@ -1,4 +1,9 @@
-import { IsNull, type DataSource, type EntityManager } from "typeorm";
+import {
+  IsNull,
+  QueryFailedError,
+  type DataSource,
+  type EntityManager,
+} from "typeorm";
 import {
   Solicitation,
   StatusSolicitacao,
@@ -60,6 +65,33 @@ export interface SolicitationRepository {
 
 function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, "\\$&");
+}
+
+const POSTGRES_FOREIGN_KEY_VIOLATION = "23503";
+/** Nome da chave estrangeira de `bem_id`, criada na migration AddAssetToSolicitations. */
+export const SOLICITATION_ASSET_FOREIGN_KEY = "FK_51f1273c383645c80ebbd61f178";
+
+/** O bem informado na solicitação não existe (US008). */
+export class SolicitationAssetNotFoundError extends Error {
+  constructor() {
+    super("Bem patrimonial não encontrado.");
+    this.name = "SolicitationAssetNotFoundError";
+  }
+}
+
+function isAssetForeignKeyViolation(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) {
+    return false;
+  }
+
+  const { code, constraint } = error.driverError as {
+    code?: string;
+    constraint?: string;
+  };
+  return (
+    code === POSTGRES_FOREIGN_KEY_VIOLATION &&
+    constraint === SOLICITATION_ASSET_FOREIGN_KEY
+  );
 }
 
 export function createSolicitationRepository(
@@ -196,7 +228,16 @@ export function createSolicitationRepository(
               .andWhere("user.isActive = :isActive", { isActive: true })
               .setLock("pessimistic_write")
               .getOne(),
-          save: (solicitation) => repository.save(solicitation),
+          save: async (solicitation) => {
+            try {
+              return await repository.save(solicitation);
+            } catch (error) {
+              if (isAssetForeignKeyViolation(error)) {
+                throw new SolicitationAssetNotFoundError();
+              }
+              throw error;
+            }
+          },
         };
         return work(transaction);
       });
