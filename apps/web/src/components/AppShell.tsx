@@ -14,6 +14,7 @@ import {
   HomeIcon,
   LogoutIcon,
   MenuIcon,
+  ReportsIcon,
   SolicitationIcon,
   UsersIcon,
 } from "./icons";
@@ -58,12 +59,18 @@ export function navItemsFor(role: SessionUser["role"]): NavItem[] {
       ? [{ path: "/assets", label: "Patrimônio", icon: <AssetIcon /> }]
       : []),
     ...(role === "GESTOR"
-      ? [{ path: "/users", label: "Usuários", icon: <UsersIcon /> }]
+      ? [
+          { path: "/reports", label: "Relatórios", icon: <ReportsIcon /> },
+          { path: "/users", label: "Usuários", icon: <UsersIcon /> },
+        ]
       : []),
   ];
 }
 
 function sectionOf(path: string): string {
+  if (path.startsWith("/reports")) {
+    return "/reports";
+  }
   if (path === "/solicitations/new") {
     return "/solicitations/new";
   }

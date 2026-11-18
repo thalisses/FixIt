@@ -128,13 +128,8 @@ describe("attachment reading API", () => {
 
     const blob = await getSolicitationAttachmentContent(7, metadata.id, signal);
     expect(blob.type).toBe(mimeType);
-    expect(blob).toBeInstanceOf(Blob);
-    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsArrayBuffer(blob);
-    });
+    expect(blob.size).toBe(bytes.length);
+    const buffer = await blob.arrayBuffer();
     expect(new Uint8Array(buffer)).toEqual(bytes);
     expect(fetchMock).toHaveBeenCalledWith(metadata.contentUrl, { credentials: "same-origin", signal });
   });

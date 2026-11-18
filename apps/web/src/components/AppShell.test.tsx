@@ -250,7 +250,7 @@ describe("Início", () => {
   });
 
   it.each([
-    ["GESTOR", ["Solicitações", "Patrimônio", "Usuários"]],
+    ["GESTOR", ["Solicitações", "Patrimônio", "Relatórios", "Usuários"]],
     ["MANUTENTOR", ["Solicitações", "Patrimônio"]],
     ["CLIENTE", ["Solicitações"]],
   ])("shows the shortcuts of a %s", async (role, expected) => {

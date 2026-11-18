@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { AppShell } from "../components/AppShell";
 import {
   AssetIcon,
+  ReportsIcon,
   SolicitationIcon,
   UsersIcon,
 } from "../components/icons";
@@ -46,6 +47,12 @@ function shortcutsFor(role: SessionUser["role"]): Shortcut[] {
       : []),
     ...(role === "GESTOR"
       ? [
+          {
+            path: "/reports",
+            title: "Relatórios",
+            description: "Acompanhe os indicadores de manutenção.",
+            icon: <ReportsIcon />,
+          },
           {
             path: "/users",
             title: "Usuários",

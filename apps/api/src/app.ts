@@ -4,8 +4,10 @@ import { createSolicitationAttachmentService } from "./services/solicitationAtta
 import type { SolicitationAttachmentRepository } from "./repositories/solicitationAttachmentRepository.js";
 import type { AttachmentStorage } from "./storage/attachmentStorage.js";
 import type { AssetRepository } from "./repositories/assetRepository.js";
+import type { ReportRepository } from "./repositories/reportRepository.js";
 import type { SolicitationRepository } from "./repositories/solicitationRepository.js";
 import { createAssetRoutes } from "./routes/assetRoutes.js";
+import { createReportRoutes } from "./routes/reportRoutes.js";
 import { createSolicitationRoutes } from "./routes/solicitationRoutes.js";
 import {
   createHealthRoutes,
@@ -16,6 +18,7 @@ import { createUserManagementRoutes } from "./routes/userManagementRoutes.js";
 import type { StatusHistoryRepository } from "./repositories/statusHistoryRepository.js";
 import { createStatusHistoryRoutes } from "./routes/statusHistoryRoutes.js";
 import { createAssetService } from "./services/assetService.js";
+import { createReportService } from "./services/reportService.js";
 import { createSolicitationService } from "./services/solicitationService.js";
 import { createStatusHistoryService } from "./services/statusHistoryService.js";
 import {
@@ -44,6 +47,7 @@ export function createApp(
   statusHistoryRepository?: StatusHistoryRepository,
   solicitationRepository?: SolicitationRepository,
   attachments?: { repository: SolicitationAttachmentRepository; storage: AttachmentStorage },
+  reportRepository?: ReportRepository,
 ): Express {
   const app = express();
 
@@ -104,6 +108,14 @@ export function createApp(
       sessionService,
       options.webOrigin,
     ));
+  }
+  if (reportRepository) {
+    app.use(
+      createReportRoutes(
+        createReportService(reportRepository),
+        sessionService,
+      ),
+    );
   }
   app.use(apiErrorHandler);
 

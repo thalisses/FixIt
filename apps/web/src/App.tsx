@@ -5,6 +5,7 @@ import { AssetsPage } from "./pages/AssetsPage";
 import { AuthenticatedPage } from "./pages/AuthenticatedPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegistrationPage } from "./pages/RegistrationPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { SolicitationsPage } from "./pages/SolicitationsPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { confirmDiscardChanges } from "./lib/unsavedChanges";
@@ -18,7 +19,7 @@ function canOpen(role: string, path: string): boolean {
   if (path === "/" || path.startsWith("/solicitations")) {
     return true;
   }
-  if (path === "/users") {
+  if (path === "/users" || path === "/reports") {
     return role === "GESTOR";
   }
   return role !== "CLIENTE" && isAssetPath(path);
@@ -122,6 +123,15 @@ function AppContent() {
       );
     }
 
+    if (currentPath === "/reports") {
+      return (
+        <ReportsPage
+          onLoggedOut={() => navigate("/login")}
+          onNavigate={navigate}
+        />
+      );
+    }
+
     return (
       <AuthenticatedPage
         onLoggedOut={() => navigate("/login")}
@@ -132,6 +142,7 @@ function AppContent() {
 
   return currentPath === "/login" ||
     currentPath === "/users" ||
+    currentPath === "/reports" ||
     currentPath.startsWith("/solicitations") ||
     isAssetPath(currentPath) ? (
     <LoginPage />
