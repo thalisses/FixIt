@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../components/AppShell";
+import {
+  emptyReportFilters,
+  ReportFiltersForm,
+} from "../components/reports/ReportFilters";
 import { useAuth } from "../context/AuthContext";
 import {
   getMaintenanceReport,
   ReportApiError,
   type MaintenanceReport,
+  type ReportFilters,
 } from "../lib/reportApi";
 import "../styles/reports.css";
 
@@ -33,6 +38,7 @@ function formatAverage(hours: number | null): string {
 export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
   const { refresh } = useAuth();
   const [report, setReport] = useState<MaintenanceReport | null>(null);
+  const [filters, setFilters] = useState<ReportFilters>(emptyReportFilters);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadCount, setReloadCount] = useState(0);
@@ -56,7 +62,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
     setIsLoading(true);
     setErrorMessage("");
 
-    void getMaintenanceReport()
+    void getMaintenanceReport(filters)
       .then((result) => {
         if (isCurrent) {
           setReport(result);
@@ -76,7 +82,23 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
     return () => {
       isCurrent = false;
     };
-  }, [reloadCount, handleError]);
+  }, [filters, reloadCount, handleError]);
+
+  const hasFilters = Boolean(
+    filters.de ||
+      filters.ate ||
+      filters.setor?.trim() ||
+      filters.tipo ||
+      filters.status,
+  );
+
+  function applyFilters(nextFilters: ReportFilters) {
+    setFilters(nextFilters);
+  }
+
+  function clearFilters() {
+    setFilters(emptyReportFilters);
+  }
 
   return (
     <AppShell
@@ -91,6 +113,12 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
             <p>Visão consolidada das solicitações de manutenção.</p>
           </div>
         </div>
+
+        <ReportFiltersForm
+          applied={filters}
+          onApply={applyFilters}
+          onClear={clearFilters}
+        />
 
         {errorMessage ? (
           <div className="management-error">
@@ -111,10 +139,25 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
           </div>
         ) : !report || !report.hasData ? (
           <div className="asset-empty" role="status">
-            <p>
-              Ainda não há solicitações registradas. O painel será preenchido
-              quando houver chamados.
-            </p>
+            {hasFilters ? (
+              <>
+                <p>
+                  Nenhum dado encontrado para os filtros selecionados.
+                </p>
+                <button
+                  className="text-action"
+                  onClick={clearFilters}
+                  type="button"
+                >
+                  Limpar filtros
+                </button>
+              </>
+            ) : (
+              <p>
+                Ainda não há solicitações registradas. O painel será preenchido
+                quando houver chamados.
+              </p>
+            )}
           </div>
         ) : (
           <>
