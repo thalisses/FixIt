@@ -7,6 +7,7 @@ import { loadEnvironment } from "./config/env.js";
 import { AuthSession } from "./entities/AuthSession.js";
 import { User } from "./entities/User.js";
 import { createAssetRepository } from "./repositories/assetRepository.js";
+import { createReportRepository } from "./repositories/reportRepository.js";
 import { createSolicitationRepository } from "./repositories/solicitationRepository.js";
 import { createStatusHistoryRepository } from "./repositories/statusHistoryRepository.js";
 import { createUserManagementRepository } from "./repositories/userManagementRepository.js";
@@ -45,6 +46,7 @@ async function startServer(): Promise<void> {
     createStatusHistoryRepository(dataSource),
     createSolicitationRepository(dataSource),
     { repository: createSolicitationAttachmentRepository(dataSource), storage: createLocalAttachmentStorage(environment.uploadDir) },
+    createReportRepository(dataSource),
   ).listen(
     environment.port,
     "0.0.0.0",
