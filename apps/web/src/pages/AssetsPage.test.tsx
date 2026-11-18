@@ -736,6 +736,7 @@ describe("AssetsPage navigation", () => {
       "Nova solicitação",
       "Solicitações",
       "Patrimônio",
+      "Relatórios",
       "Usuários",
     ]);
   });
