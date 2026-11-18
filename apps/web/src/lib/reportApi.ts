@@ -1,3 +1,13 @@
+import type { AreaTecnica, StatusSolicitacao } from "./assetApi";
+
+export interface ReportFilters {
+  de?: string;
+  ate?: string;
+  setor?: string;
+  tipo?: AreaTecnica | "";
+  status?: StatusSolicitacao | "";
+}
+
 export interface ReportStatusCounts {
   EM_ABERTO: number;
   EM_ATENDIMENTO: number;
@@ -33,10 +43,31 @@ export class ReportApiError extends Error {
   }
 }
 
-export async function getMaintenanceReport(): Promise<MaintenanceReport> {
-  const response = await fetch("/api/reports/maintenance", {
-    credentials: "same-origin",
-  });
+export async function getMaintenanceReport(
+  filters: ReportFilters = {},
+): Promise<MaintenanceReport> {
+  const params = new URLSearchParams();
+  if (filters.de) {
+    params.set("de", filters.de);
+  }
+  if (filters.ate) {
+    params.set("ate", filters.ate);
+  }
+  if (filters.setor?.trim()) {
+    params.set("setor", filters.setor.trim());
+  }
+  if (filters.tipo) {
+    params.set("tipo", filters.tipo);
+  }
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+  const query = params.toString();
+
+  const response = await fetch(
+    `/api/reports/maintenance${query ? `?${query}` : ""}`,
+    { credentials: "same-origin" },
+  );
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {

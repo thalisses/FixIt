@@ -42,6 +42,25 @@ describe("getMaintenanceReport", () => {
     });
   });
 
+  it("builds the filter query string", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: report }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getMaintenanceReport({
+      de: "2026-11-01",
+      ate: "2026-11-30",
+      setor: " TI ",
+      tipo: "INFORMATICA",
+      status: "CONCLUIDO",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/reports/maintenance?de=2026-11-01&ate=2026-11-30" +
+        "&setor=TI&tipo=INFORMATICA&status=CONCLUIDO",
+      { credentials: "same-origin" },
+    );
+  });
+
   it("throws a typed error on failure", async () => {
     vi.stubGlobal(
       "fetch",

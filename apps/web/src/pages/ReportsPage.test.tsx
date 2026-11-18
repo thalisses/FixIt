@@ -58,6 +58,41 @@ async function settle() {
   });
 }
 
+function setValue(selector: string, value: string) {
+  const element = container.querySelector<
+    HTMLInputElement | HTMLSelectElement
+  >(selector);
+  expect(element, selector).not.toBeNull();
+  const prototype =
+    element instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  act(() => {
+    setter?.call(element, value);
+    element?.dispatchEvent(new Event("input", { bubbles: true }));
+    element?.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function clickButton(label: string) {
+  const button = Array.from(container.querySelectorAll("button")).find(
+    (candidate) =>
+      candidate.textContent === label ||
+      candidate.getAttribute("aria-label") === label,
+  );
+  expect(button, `botão ${label}`).toBeDefined();
+  await act(async () => button?.click());
+  await settle();
+}
+
+function lastReportUrl(fetchMock: ReturnType<typeof stubReport>): string {
+  const urls = fetchMock.mock.calls
+    .map(([input]) => String(input))
+    .filter((url) => url.startsWith("/api/reports/maintenance"));
+  return urls.at(-1) ?? "";
+}
+
 async function mountPage() {
   act(() => {
     root.render(
@@ -96,6 +131,73 @@ describe("ReportsPage", () => {
     expect(container.textContent).toContain("Em aberto");
     expect(container.textContent).toContain("Projetor");
     expect(container.textContent).toContain("PAT-1");
+  });
+
+  it("applies the period, sector, type and status filters (CA1)", async () => {
+    const fetchMock = stubReport();
+    await mountPage();
+
+    setValue('input[name="de"]', "2026-11-01");
+    setValue('input[name="ate"]', "2026-11-30");
+    setValue('input[name="setor"]', "TI");
+    setValue('select[name="tipo"]', "INFORMATICA");
+    setValue('select[name="status"]', "CONCLUIDO");
+    await clickButton("Aplicar filtros");
+
+    const url = lastReportUrl(fetchMock);
+    expect(url).toContain("de=2026-11-01");
+    expect(url).toContain("ate=2026-11-30");
+    expect(url).toContain("setor=TI");
+    expect(url).toContain("tipo=INFORMATICA");
+    expect(url).toContain("status=CONCLUIDO");
+  });
+
+  it("rejects a period with the end before the start (CA2)", async () => {
+    const fetchMock = stubReport();
+    await mountPage();
+    const callsBefore = fetchMock.mock.calls.filter(([input]) =>
+      String(input).startsWith("/api/reports/maintenance"),
+    ).length;
+
+    setValue('input[name="de"]', "2026-11-30");
+    setValue('input[name="ate"]', "2026-11-01");
+    await clickButton("Aplicar filtros");
+
+    expect(container.textContent).toContain(
+      "A data inicial não pode ser posterior à final.",
+    );
+    const callsAfter = fetchMock.mock.calls.filter(([input]) =>
+      String(input).startsWith("/api/reports/maintenance"),
+    ).length;
+    expect(callsAfter).toBe(callsBefore);
+  });
+
+  it("shows an informative empty state when filters return nothing (CA3)", async () => {
+    stubReport(
+      jsonResponse({
+        data: {
+          total: 0,
+          byStatus: {
+            EM_ABERTO: 0,
+            EM_ATENDIMENTO: 0,
+            CONCLUIDO: 0,
+            CANCELADA: 0,
+          },
+          averageResolutionHours: null,
+          topAssets: [],
+          hasData: false,
+        },
+      }),
+    );
+    await mountPage();
+
+    setValue('select[name="status"]', "CONCLUIDO");
+    await clickButton("Aplicar filtros");
+
+    expect(container.textContent).toContain(
+      "Nenhum dado encontrado para os filtros selecionados.",
+    );
+    expect(container.textContent).toContain("Limpar filtros");
   });
 
   it("shows an informative empty state when there is no data (CA3)", async () => {
