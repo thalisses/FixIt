@@ -284,3 +284,83 @@ describe("US007 creation form", () => {
     await act(async () => resolve(json({ data: { solicitation: created } })));
   });
 });
+
+describe("US008 asset in the creation form", () => {
+  const asset = { id: 3, codigoPatrimonial: "PAT-3", descricao: "Projetor Epson" };
+
+  // Responde a busca de bens e a criação da solicitação conforme a URL.
+  function stubApi(creation: () => Response) {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.startsWith("/api/assets") ? json({ data: [asset] }, 200) : creation());
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function chooseAsset() {
+    const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "PAT-3");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const search = Array.from(container.querySelectorAll("button")).find((entry) => entry.textContent === "Buscar")!;
+    await act(async () => search.click());
+    act(() => container.querySelector<HTMLButtonElement>(".solicitation-asset-results button")!.click());
+  }
+
+  it("sends the chosen asset and shows it in the confirmation (CA1)", async () => {
+    const fetchMock = stubApi(() => json({ data: { solicitation: { ...created, bem: asset } } }));
+    fill();
+    await chooseAsset();
+    await act(async () => submit());
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/solicitations", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        local: "Bloco C", tipoProblema: "INFORMATICA", descricaoProblema: "Projetor não liga",
+        urgencia: "ALTA", bemId: 3,
+      }),
+    }));
+    expect(container.textContent).toContain("registrada com sucesso");
+    expect(container.textContent).toContain("Bem: PAT-3, Projetor Epson");
+  });
+
+  it("confirms a solicitation without an asset (CA2)", async () => {
+    stubApi(() => json({ data: { solicitation: created } }));
+    fill();
+    await act(async () => submit());
+    expect(container.textContent).toContain("Bem: não informado");
+  });
+
+  it("keeps the asset and shows the API error on it when the asset is refused", async () => {
+    stubApi(() => json({ error: {
+      code: "VALIDATION_ERROR", message: "Bem patrimonial não encontrado.",
+      fields: { bemId: "Bem patrimonial não encontrado." },
+    } }, 422));
+    fill();
+    await chooseAsset();
+    await act(async () => submit());
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Bem patrimonial não encontrado.");
+    expect(container.querySelector(".solicitation-asset-picker .asset-field-error")?.textContent)
+      .toBe("Bem patrimonial não encontrado.");
+    expect(container.textContent).toContain("PAT-3 Projetor Epson");
+
+    // Remover o bem limpa o erro que era dele.
+    const remove = Array.from(container.querySelectorAll("button")).find((entry) => entry.textContent === "Remover")!;
+    act(() => remove.click());
+    expect(container.querySelector(".solicitation-asset-picker .asset-field-error")).toBeNull();
+  });
+
+  it("does not send the solicitation when Enter is pressed in the asset search", async () => {
+    const fetchMock = stubApi(() => json({ data: { solicitation: created } }));
+    fill();
+    const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "PAT-3");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => { input.dispatchEvent(enter); });
+    expect(enter.defaultPrevented).toBe(true);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(["/api/assets?busca=PAT-3"]);
+    expect(container.textContent).not.toContain("registrada");
+  });
+});

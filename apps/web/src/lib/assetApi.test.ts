@@ -4,6 +4,7 @@ import {
   createAsset,
   listAssetSolicitations,
   listAssets,
+  searchAssetOptions,
   updateAsset,
   type Asset,
 } from "./assetApi";
@@ -124,6 +125,44 @@ describe("assetApi", () => {
     stubFetch({ data: [{ id: 3 }] });
 
     await expect(listAssetSolicitations(7)).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    });
+  });
+});
+
+describe("assetApi: asset options for the solicitation form (US008)", () => {
+  it("accepts the minimal answer a Cliente receives, encoding the term", async () => {
+    const minimal = { id: 1, codigoPatrimonial: "PAT-1", descricao: "Projetor Epson" };
+    const fetchMock = stubFetch({ data: [minimal] });
+
+    await expect(searchAssetOptions(" projetor & tela ")).resolves.toEqual([minimal]);
+
+    expect(fetchMock.mock.calls[0]).toEqual([
+      "/api/assets?busca=projetor%20%26%20tela",
+      { credentials: "same-origin" },
+    ]);
+  });
+
+  it("keeps only id, code and description of a full asset", async () => {
+    stubFetch({ data: [asset] });
+
+    await expect(searchAssetOptions("PAT-1")).resolves.toEqual([
+      { id: 1, codigoPatrimonial: "PAT-1", descricao: "Projetor Epson" },
+    ]);
+  });
+
+  it("does not call the API without a term", async () => {
+    const fetchMock = stubFetch({ data: [asset] });
+
+    await expect(searchAssetOptions("   ")).resolves.toEqual([]);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses options without code or description", async () => {
+    stubFetch({ data: [{ id: 1, descricao: "Projetor" }] });
+
+    await expect(searchAssetOptions("projetor")).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
   });

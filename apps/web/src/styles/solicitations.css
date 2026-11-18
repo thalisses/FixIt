@@ -13,6 +13,55 @@
   border-top: 1px solid #e2e8f0;
 }
 
+/* US008: bem patrimonial opcional na abertura. */
+.solicitation-asset-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+.solicitation-asset-picker .field-help { margin: 0; }
+.solicitation-asset-picker .field-help:empty { display: none; }
+.solicitation-asset-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.solicitation-asset-results button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.solicitation-asset-results button:hover:not(:disabled) { background: #f8fafc; }
+.solicitation-asset-results span { overflow-wrap: anywhere; }
+.solicitation-asset-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.solicitation-asset-selected p { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.solicitation-asset-selected .field-help { flex-basis: 100%; }
+
 .solicitation-attachment-picker input[type="file"] { max-width: 100%; }
 .solicitation-attachment-picker .field-help { margin: 0; }
 .solicitation-attachment-previews {
