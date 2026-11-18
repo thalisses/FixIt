@@ -6,6 +6,7 @@ import { AuthSession } from "../entities/AuthSession.js";
 import { User, UserRole } from "../entities/User.js";
 import type {
   MaintenanceReport,
+  MaintenanceReportFilters,
   ReportRepository,
 } from "../repositories/reportRepository.js";
 import type { SessionRepository } from "../services/sessionService.js";
@@ -91,11 +92,12 @@ afterEach(async () => {
 
 function createFakeRepository(
   report: MaintenanceReport = sampleReport,
-): ReportRepository & { calls: number } {
+): ReportRepository & { calls: Array<MaintenanceReportFilters | undefined> } {
+  const calls: Array<MaintenanceReportFilters | undefined> = [];
   return {
-    calls: 0,
-    async getMaintenanceReport() {
-      this.calls += 1;
+    calls,
+    async getMaintenanceReport(filters) {
+      calls.push(filters);
       return report;
     },
   };
@@ -142,7 +144,7 @@ describe("GET /api/reports/maintenance", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ data: sampleReport });
-    expect(repository.calls).toBe(1);
+    expect(repository.calls).toEqual([{}]);
   });
 
   it("returns the empty state when there are no requests (CA3)", async () => {
@@ -180,6 +182,60 @@ describe("GET /api/reports/maintenance", () => {
       expect(response.status).toBe(403);
     },
   );
+
+  it("passes the filters to the repository (CA1)", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await fetch(
+      `${baseUrl}/api/reports/maintenance?de=2026-11-01&ate=2026-11-30` +
+        "&setor=TI&tipo=INFORMATICA&status=CONCLUIDO",
+      { headers: { Cookie: `fixit_session=${sessionToken}` } },
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.calls[0]).toEqual({
+      de: "2026-11-01",
+      ate: "2026-11-30",
+      setor: "TI",
+      tipo: "INFORMATICA",
+      status: "CONCLUIDO",
+    });
+  });
+
+  it("rejects a period with the end before the start (CA2)", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await fetch(
+      `${baseUrl}/api/reports/maintenance?de=2026-11-30&ate=2026-11-01`,
+      { headers: { Cookie: `fixit_session=${sessionToken}` } },
+    );
+
+    expect(response.status).toBe(422);
+    expect(repository.calls).toHaveLength(0);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        fields: {
+          de: "A data inicial não pode ser posterior à final.",
+        },
+      },
+    });
+  });
+
+  it("rejects an invalid status", async () => {
+    const repository = createFakeRepository();
+    const baseUrl = await startServer(repository);
+
+    const response = await fetch(
+      `${baseUrl}/api/reports/maintenance?status=INVALIDO`,
+      { headers: { Cookie: `fixit_session=${sessionToken}` } },
+    );
+
+    expect(response.status).toBe(422);
+    expect(repository.calls).toHaveLength(0);
+  });
 
   it("refuses a request without a session", async () => {
     const baseUrl = await startServer(createFakeRepository());
