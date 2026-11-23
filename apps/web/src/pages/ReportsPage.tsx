@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../components/AppShell";
 import {
+  formatDate,
+  statusLabels,
+  tipoProblemaLabels,
+} from "../components/assets/assetPresentation";
+import {
   emptyReportFilters,
   ReportFiltersForm,
 } from "../components/reports/ReportFilters";
@@ -11,6 +16,8 @@ import {
   type MaintenanceReport,
   type ReportFilters,
 } from "../lib/reportApi";
+import { generateReportCsv } from "../lib/reportCsv";
+import { formatReportAverage } from "../lib/reportPresentation";
 import "../styles/reports.css";
 
 interface ReportsPageProps {
@@ -24,16 +31,6 @@ const statusCards = [
   { key: "CONCLUIDO", label: "Concluídas", className: "concluido" },
   { key: "CANCELADA", label: "Canceladas", className: "cancelada" },
 ] as const;
-
-function formatAverage(hours: number | null): string {
-  if (hours === null) {
-    return "Sem solicitações concluídas";
-  }
-  if (hours < 24) {
-    return `${hours.toFixed(1)} h`;
-  }
-  return `${(hours / 24).toFixed(1)} dias`;
-}
 
 export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
   const { refresh } = useAuth();
@@ -93,11 +90,41 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
   );
 
   function applyFilters(nextFilters: ReportFilters) {
+    if (nextFilters === filters) {
+      return;
+    }
+    setIsLoading(true);
     setFilters(nextFilters);
   }
 
   function clearFilters() {
-    setFilters(emptyReportFilters);
+    applyFilters(emptyReportFilters);
+  }
+
+  const displayedReport = !errorMessage && !isLoading && report?.hasData
+    ? report
+    : null;
+
+  function exportCsv() {
+    if (!displayedReport) {
+      return;
+    }
+
+    // The UTF-8 BOM helps Excel detect the encoding.
+    const csv = new Blob(["\uFEFF", generateReportCsv(displayedReport)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(csv);
+    try {
+      link.href = url;
+      link.download = "relatorio-manutencao.csv";
+      document.body.append(link);
+      link.click();
+    } finally {
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
   }
 
   return (
@@ -106,13 +133,48 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
       onLoggedOut={onLoggedOut}
       onNavigate={onNavigate}
     >
-      <section className="asset-page" aria-labelledby="reports-title">
+      <section className="asset-page reports-page" aria-labelledby="reports-title">
         <div className="asset-page-heading">
           <div>
             <h1 id="reports-title">Relatórios</h1>
             <p>Visão consolidada das solicitações de manutenção.</p>
           </div>
+          <div className="report-page-actions">
+            <button
+              className="primary-action"
+              disabled={!displayedReport}
+              onClick={exportCsv}
+              type="button"
+            >
+              Exportar CSV
+            </button>
+            <button
+              className="primary-action"
+              disabled={!displayedReport}
+              onClick={() => window.print()}
+              type="button"
+            >
+              Imprimir
+            </button>
+          </div>
         </div>
+
+        {displayedReport && (
+          <p className="report-print-filters">
+            <strong>Filtros aplicados</strong>
+            {hasFilters ? (
+              <>
+                {filters.de && <span>De: {formatDate(filters.de)}</span>}
+                {filters.ate && <span>Até: {formatDate(filters.ate)}</span>}
+                {filters.setor?.trim() && <span>Setor: {filters.setor.trim()}</span>}
+                {filters.tipo && <span>Tipo de problema: {tipoProblemaLabels[filters.tipo]}</span>}
+                {filters.status && <span>Status: {statusLabels[filters.status]}</span>}
+              </>
+            ) : (
+              <span>Nenhum filtro aplicado</span>
+            )}
+          </p>
+        )}
 
         <ReportFiltersForm
           applied={filters}
@@ -137,7 +199,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
           <div className="asset-loading" role="status" aria-busy="true">
             Carregando indicadores...
           </div>
-        ) : !report || !report.hasData ? (
+        ) : !displayedReport ? (
           <div className="asset-empty" role="status">
             {hasFilters ? (
               <>
@@ -164,7 +226,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
             <div className="report-summary-grid">
               <article className="report-card report-total">
                 <span className="report-card-label">Total de solicitações</span>
-                <strong>{report.total}</strong>
+                <strong>{displayedReport.total}</strong>
                 <span className="report-card-note">
                   Chamados registrados no sistema
                 </span>
@@ -174,7 +236,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
                 <span className="report-card-label">
                   Tempo médio até conclusão
                 </span>
-                <strong>{formatAverage(report.averageResolutionHours)}</strong>
+                <strong>{formatReportAverage(displayedReport.averageResolutionHours)}</strong>
                 <span className="report-card-note">
                   Considera apenas solicitações concluídas
                 </span>
@@ -192,7 +254,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
                     key={card.key}
                   >
                     <span>{card.label}</span>
-                    <strong>{report.byStatus[card.key]}</strong>
+                    <strong>{displayedReport.byStatus[card.key]}</strong>
                   </article>
                 ))}
               </div>
@@ -213,7 +275,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
                 </div>
               </div>
 
-              {report.topAssets.length === 0 ? (
+              {displayedReport.topAssets.length === 0 ? (
                 <div className="asset-empty" role="status">
                   <p>
                     Nenhuma solicitação está vinculada a um bem patrimonial.
@@ -231,7 +293,7 @@ export function ReportsPage({ onLoggedOut, onNavigate }: ReportsPageProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.topAssets.map((entry, index) => (
+                      {displayedReport.topAssets.map((entry, index) => (
                         <tr key={entry.asset.id}>
                           <td data-label="Posição">
                             <span className="report-rank">{index + 1}</span>
