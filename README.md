@@ -66,9 +66,8 @@ O login cria uma sessão opaca armazenada no servidor; o cookie é `HttpOnly`,
 
 A API aplica os perfis Cliente, Manutentor e Gestor. Gestores podem listar
 usuários e alterar perfis; a interface confirma a alteração e a API impede
-rebaixar o último Gestor ativo. As políticas de solicitação, ativo e relatório
-estão prontas para serem aplicadas quando esses módulos de domínio forem
-implementados.
+rebaixar o último Gestor ativo. A API também aplica autorização aos fluxos
+implementados de ativos, solicitações, histórico e relatórios.
 
 Ao promover um usuário a Manutentor, o Gestor deve escolher uma especialidade:
 Elétrica, Hidráulica, Informática, Estrutural ou Outros. Especialidades podem
@@ -93,8 +92,9 @@ docker compose exec api npm run db:migrate --workspace @fixit/api
 ```
 
 A API também aplica migrations antes de aceitar requisições. Em produção,
-configure `WEB_ORIGIN` com a origem HTTPS real e termine TLS na infraestrutura
-de implantação.
+configure `WEB_ORIGIN` com a origem HTTPS real; no serviço Render ela usa
+`RENDER_EXTERNAL_URL` se não houver uma substituição explícita. Termine TLS na
+infraestrutura de implantação.
 
 ## Migrations
 
@@ -117,6 +117,87 @@ npm run migration:revert --workspace @fixit/api
 ```
 
 Migration que já entrou na `main` não deve ser editada: crie outra para corrigir.
+
+## Piloto gratuito (não produtivo)
+
+O plano aprovado é usar um único serviço Node no Render Free para servir o
+frontend e a API na mesma origem, com PostgreSQL gerenciado no Supabase Free.
+O piloto usará apenas dados fictícios; ainda não foi provisionado nem
+publicado. Consulte [SPEC-pilot-deployment.md](SPEC-pilot-deployment.md) e
+[tasks/plan.md](tasks/plan.md) antes de executar a configuração.
+
+**Isto não é produção institucional.** O Render informa que serviços Free não
+devem ser usados em produção: eles dormem após 15 minutos sem tráfego, podem
+levar cerca de um minuto para voltar e têm filesystem efêmero. O Supabase Free
+inclui 500 MB de banco e pode pausar projetos com baixa atividade após uma
+semana. Não use dados reais, senhas reutilizadas ou arquivos importantes.
+
+O GitHub Pages não será usado para o frontend autenticado. Além de hospedar
+somente arquivos estáticos, a documentação do GitHub desaconselha Pages para
+transações sensíveis como envio de senhas. A API Express continuaria exigindo
+uma hospedagem separada e a separação de origens complicaria os cookies de
+sessão atuais.
+
+### Configuração prevista
+
+1. Crie um projeto PostgreSQL Supabase no plano Free e escolha as regiões Free
+   mais próximas disponíveis para Supabase e Render (podem não coincidir).
+   Para uma aplicação Node persistente, use a connection string **Session
+   pooler** indicada pelo
+   Supabase; confirme TLS e conectividade antes de publicar. Não habilite
+   Supabase Auth nem coloque chaves administrativas no frontend.
+2. Crie o serviço a partir de `render.yaml` e selecione somente o plano Free.
+   O build usa:
+
+   ```sh
+   npm ci --include=dev
+   npm run build:pilot
+   npm prune --omit=dev
+   ```
+
+   O processo de execução usa `npm start --workspace @fixit/api`; o health
+   check é `/health/ready`.
+3. Informe `DATABASE_URL` como variável secreta no painel do Render. Não a
+   coloque no repositório, no bundle web ou em comandos registrados no
+   histórico do terminal. Render fornece `PORT` e `RENDER_EXTERNAL_URL`; o
+   FixIt usa a URL pública do serviço como `WEB_ORIGIN` por padrão. Se depois
+   for aprovado um domínio personalizado, configure `WEB_ORIGIN` com a origem
+   HTTPS correspondente.
+4. `NODE_ENV=production` e `ATTACHMENTS_ENABLED=false` são definidos para o
+   serviço. `VITE_ATTACHMENTS_ENABLED=false` desativa os controles de anexos no
+   bundle. Não configure upload até haver armazenamento privado e durável;
+   `UPLOAD_DIR` só é obrigatório quando anexos são habilitados.
+5. Ao iniciar, a API aplica as migrations TypeORM antes de aceitar tráfego. O
+   plano Free não oferece comando pre-deploy do Render; mantenha uma única
+   instância para o piloto. `/health/ready` deve responder com sucesso antes
+   de compartilhar o endereço.
+6. Cadastre uma conta de teste pela interface. Para provisionar essa conta
+   como primeiro Gestor, rode
+   `npm run db:provision-manager --workspace @fixit/api -- gestor@exemplo.invalid`
+   em um terminal interativo com `DATABASE_URL` fornecida de forma segura no
+   ambiente. Substitua o e-mail pelo da conta de teste. O comando solicita a
+   senha sem exibi-la; nunca passe a senha como argumento.
+
+O usuário aceitou o cadastro público para este piloto: qualquer pessoa que
+tenha o endereço pode criar uma conta Cliente. Não compartilhe o link além do
+grupo de teste. Uma lista de participantes autorizados exigiria uma mudança de
+produto antes de publicar.
+
+### Limitações e encerramento
+
+- Render Free desliga a instância após 15 minutos sem tráfego, demora em torno
+  de um minuto para reativar, usa filesystem efêmero e pode suspender serviços
+  quando os limites de uso do workspace forem atingidos. O plano Free é para
+  testes/projetos pessoais, não para operação de produção.
+- Supabase Free inclui 500 MB PostgreSQL, 5 GB de egress e não impede pausa de
+  projetos com atividade baixa por uma semana. Não há backup diário incluído
+  neste plano. Verifique a quota e a política atuais no dia da criação.
+- A configuração deve permanecer em custo $0: não adicione método de pagamento,
+  instância/add-on pago nem exceda quotas. Se um provedor exigir cartão ou uma
+  opção paga, pare e peça nova confirmação ao usuário.
+- Ao encerrar o piloto, exporte somente se necessário os dados fictícios e
+  remova os recursos pelos painéis dos provedores depois de confirmar a
+  intenção de descarte. Não há rotina automática de teardown.
 
 ## Armazenamento de evidências (US009)
 
@@ -141,7 +222,8 @@ ficam no PostgreSQL; os bytes das imagens ficam no filesystem, fora do banco.
 `UPLOAD_DIR` define a raiz absoluta. No host, se omitida fora de produção, o
 padrão é `uploads` no diretório de trabalho do processo (normalmente
 `apps/api/uploads` ao executar pelo workspace). Em produção a variável é
-obrigatória. Valores relativos, vazios ou com byte nulo são rejeitados.
+obrigatória quando `ATTACHMENTS_ENABLED=true`. Valores relativos, vazios ou
+com byte nulo são rejeitados.
 Exemplo PowerShell para execução no host:
 
 ```powershell
@@ -263,7 +345,9 @@ reconciliação de commit incerto é coberta pelos testes unitários.
 ## Escopo atual
 
 Esta fundação contém cadastro, login, sessões, autorização por perfil,
-administração de usuários e provisionamento controlado do primeiro Gestor. As
-rotas de solicitações, ativos e relatórios ainda não foram implementadas.
+administração de usuários e provisionamento controlado do primeiro Gestor. A
+aplicação também inclui fluxos de ativos, solicitações, histórico e relatórios.
+No piloto gratuito, anexos ficam desabilitados porque o filesystem do serviço
+não é persistente.
 
 O mapa de capacidades e as especificações aprovadas estão em [CAPABILITY-MAP.md](CAPABILITY-MAP.md) e nos arquivos `SPEC-*.md`.

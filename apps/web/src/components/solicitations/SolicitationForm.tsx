@@ -8,6 +8,7 @@ import {
   type CreateSolicitationInput, type SolicitationDetail,
   type SolicitationFieldErrors,
 } from "../../lib/solicitationApi";
+import { areAttachmentsEnabled } from "../../lib/features";
 import { markChangesSaved, useUnsavedChanges } from "../../lib/unsavedChanges";
 import type { AssetOption } from "../../lib/assetApi";
 import { SolicitationAssetPicker } from "./SolicitationAssetPicker";
@@ -25,6 +26,7 @@ interface SolicitationFormProps {
 }
 
 export function SolicitationForm({ onBack, onRequestError }: SolicitationFormProps) {
+  const attachmentsEnabled = areAttachmentsEnabled();
   const [values, setValues] = useState(emptyValues);
   const [errors, setErrors] = useState<SolicitationFieldErrors>({});
   const [errorMessage, setErrorMessage] = useState("");
@@ -85,7 +87,9 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
     setIsSaving(true);
     try {
       // Congela chave e arquivos antes de criar o chamado; não muda nos reenvios.
-      const batch = files.length ? { key: crypto.randomUUID(), files: [...files] } : null;
+      const batch = attachmentsEnabled && files.length
+        ? { key: crypto.randomUUID(), files: [...files] }
+        : null;
       const result = await createSolicitation({
         local: values.local.trim(),
         tipoProblema: values.tipoProblema as CreateSolicitationInput["tipoProblema"],
@@ -156,7 +160,7 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
         <p>Descreva o problema para registrar um chamado de manutenção.</p>
       </div></div>
       <form ref={formRef} className="asset-card asset-form solicitation-create-form" noValidate onSubmit={submit} aria-busy={isSaving}>
-        <p className="field-help">Os quatro primeiros campos são obrigatórios. O bem e as fotos são opcionais.</p>
+        <p className="field-help">Os quatro primeiros campos são obrigatórios. O bem é opcional{attachmentsEnabled ? " e as fotos também." : "."}</p>
         {errorMessage && <p className="form-error" role="alert">{errorMessage}</p>}
         <fieldset disabled={isSaving} className="solicitation-create-fields">
           <legend>Dados da solicitação</legend>
@@ -187,7 +191,9 @@ export function SolicitationForm({ onBack, onRequestError }: SolicitationFormPro
             setErrors(({ bemId: _previous, ...rest }) => rest);
           }}
         />
-        <SolicitationAttachmentPicker files={files} onChange={setFiles} disabled={isSaving} />
+        {attachmentsEnabled && (
+          <SolicitationAttachmentPicker files={files} onChange={setFiles} disabled={isSaving} />
+        )}
         <div className="asset-form-actions">
           <button className="text-action" disabled={isSaving} type="button" onClick={onBack}>Cancelar</button>
           <button className="primary-action solicitation-action-button" disabled={isSaving} type="submit">{isSaving ? "Registrando..." : "Criar solicitação"}</button>

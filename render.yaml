@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: fixit-pilot
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build:pilot && npm prune --omit=dev
+    startCommand: npm start --workspace @fixit/api
+    healthCheckPath: /health/ready
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ATTACHMENTS_ENABLED
+        value: "false"
+      - key: VITE_ATTACHMENTS_ENABLED
+        value: "false"
+      - key: DATABASE_URL
+        sync: false

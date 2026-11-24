@@ -11,6 +11,7 @@
   "scripts": {
     "dev:web": "npm run dev --workspace @fixit/web",
     "dev:api": "npm run dev --workspace @fixit/api",
+    "build:pilot": "npm run build --workspace @fixit/web && npm run build --workspace @fixit/api",
     "build": "npm run build --workspaces --if-present",
     "test": "npm test --workspaces --if-present"
   }

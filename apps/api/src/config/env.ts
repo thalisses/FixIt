@@ -5,6 +5,7 @@ export interface AppEnvironment {
   databaseUrl: string;
   webOrigin: string;
   isProduction: boolean;
+  attachmentsEnabled: boolean;
   uploadDir: string;
 }
 
@@ -33,15 +34,50 @@ export function loadEnvironment(
   }
 
   const isProduction = source.NODE_ENV === "production";
-  const webOrigin = loadWebOrigin(source.WEB_ORIGIN, isProduction);
+  const webOrigin = loadWebOrigin(
+    source.WEB_ORIGIN?.trim() || source.RENDER_EXTERNAL_URL,
+    isProduction,
+  );
+  const attachmentsEnabled = loadAttachmentsEnabled(
+    source.ATTACHMENTS_ENABLED,
+    isProduction,
+  );
 
   const configuredUploadDir = source.UPLOAD_DIR?.trim();
   if (source.UPLOAD_DIR !== undefined && (!configuredUploadDir || configuredUploadDir.includes("\0") || !isAbsolute(configuredUploadDir))) {
     throw new Error("UPLOAD_DIR must be a nonempty absolute path.");
   }
-  if (isProduction && !configuredUploadDir) throw new Error("UPLOAD_DIR is required in production.");
+  if (isProduction && attachmentsEnabled && !configuredUploadDir) {
+    throw new Error("UPLOAD_DIR is required in production when attachments are enabled.");
+  }
   const uploadDir = configuredUploadDir ?? resolve("uploads");
-  return { port, databaseUrl, webOrigin, isProduction, uploadDir };
+  return {
+    port,
+    databaseUrl,
+    webOrigin,
+    isProduction,
+    attachmentsEnabled,
+    uploadDir,
+  };
+}
+
+function loadAttachmentsEnabled(
+  value: string | undefined,
+  isProduction: boolean,
+): boolean {
+  if (value === undefined) {
+    return !isProduction;
+  }
+
+  const configuredValue = value.trim().toLowerCase();
+  if (configuredValue === "true") {
+    return true;
+  }
+  if (configuredValue === "false") {
+    return false;
+  }
+
+  throw new Error("ATTACHMENTS_ENABLED must be 'true' or 'false'.");
 }
 
 function loadWebOrigin(value: string | undefined, isProduction: boolean): string {

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { createSolicitationAttachmentRepository } from "./repositories/solicitationAttachmentRepository.js";
 import { createLocalAttachmentStorage } from "./storage/localAttachmentStorage.js";
@@ -32,6 +33,12 @@ async function startServer(): Promise<void> {
       authSessionRepository.findOneBy({ tokenHash }),
     findUserById: (userId) => userRepository.findOneBy({ id: userId }),
   };
+  const attachments = environment.attachmentsEnabled
+    ? {
+        repository: createSolicitationAttachmentRepository(dataSource),
+        storage: createLocalAttachmentStorage(environment.uploadDir),
+      }
+    : undefined;
 
   createApp(
     checkDatabase,
@@ -41,11 +48,14 @@ async function startServer(): Promise<void> {
     {
       secureCookies: environment.isProduction,
       webOrigin: environment.webOrigin,
+      webDirectory: environment.isProduction
+        ? fileURLToPath(new URL("../../web/dist", import.meta.url))
+        : undefined,
     },
     createAssetRepository(dataSource),
     createStatusHistoryRepository(dataSource),
     createSolicitationRepository(dataSource),
-    { repository: createSolicitationAttachmentRepository(dataSource), storage: createLocalAttachmentStorage(environment.uploadDir) },
+    attachments,
     createReportRepository(dataSource),
   ).listen(
     environment.port,

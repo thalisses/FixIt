@@ -194,9 +194,20 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("SolicitationDetail", () => {
+  it("does not fetch or render attachments when disabled", async () => {
+    vi.stubEnv("VITE_ATTACHMENTS_ENABLED", "false");
+    const fetchMock = stubBackend({});
+
+    await mountDetail();
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/attachments"))).toBe(false);
+    expect(container.querySelector(".solicitation-attachments")).toBeNull();
+  });
+
   const image = {
     id: "image-1", nomeOriginal: "evidencia.png", mimeType: "image/png", tamanhoBytes: 3,
     criadoEm: "2026-11-07T12:00:00.000Z",

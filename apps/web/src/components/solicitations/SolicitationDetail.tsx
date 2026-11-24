@@ -28,6 +28,7 @@ import {
 } from "./solicitationPresentation";
 import { SolicitationTimeline } from "./SolicitationTimeline";
 import { SolicitationAttachments } from "./SolicitationAttachments";
+import { areAttachmentsEnabled } from "../../lib/features";
 
 interface SolicitationDetailProps {
   id: number;
@@ -640,7 +641,9 @@ function SolicitationDetailContent({
             </div>
           )}
 
-          <SolicitationAttachments solicitationId={solicitation.id} />
+          {areAttachmentsEnabled() && (
+            <SolicitationAttachments solicitationId={solicitation.id} />
+          )}
 
           <SolicitationTimeline
             responsavelId={solicitation.responsavel?.id ?? null}

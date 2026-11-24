@@ -42,7 +42,7 @@ export function createApp(
   userRepository: UserRepository,
   sessionRepository: SessionRepository,
   userManagementRepository: UserManagementRepository,
-  options: { secureCookies: boolean; webOrigin: string },
+  options: { secureCookies: boolean; webOrigin: string; webDirectory?: string },
   assetRepository?: AssetRepository,
   statusHistoryRepository?: StatusHistoryRepository,
   solicitationRepository?: SolicitationRepository,
@@ -116,6 +116,27 @@ export function createApp(
         sessionService,
       ),
     );
+  }
+  if (options.webDirectory) {
+    const webDirectory = options.webDirectory;
+    app.use(express.static(webDirectory));
+    app.get("*", (request, response, next) => {
+      if (
+        request.path === "/api" ||
+        request.path.startsWith("/api/") ||
+        request.path === "/health" ||
+        request.path.startsWith("/health/")
+      ) {
+        next();
+        return;
+      }
+
+      response.sendFile("index.html", { root: webDirectory }, (error) => {
+        if (error) {
+          next(error);
+        }
+      });
+    });
   }
   app.use(apiErrorHandler);
 

@@ -33,6 +33,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function change(name: string, value: string) {
@@ -235,6 +236,19 @@ describe("US009 images in the existing creation form", () => {
 });
 
 describe("US007 creation form", () => {
+  it("hides image upload when disabled by the production build setting", () => {
+    vi.stubEnv("VITE_ATTACHMENTS_ENABLED", "false");
+    act(() => root.render(
+      <SolicitationForm
+        onBack={() => {}}
+        onRequestError={(error) => error instanceof Error ? error.message : "Erro de conexão"}
+      />,
+    ));
+
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(container.textContent).not.toContain("fotos");
+  });
+
   it("indicates all empty fields and rejects whitespace without sending", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

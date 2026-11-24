@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
     "db:migrate": "tsx src/migrate.ts",
     "db:provision-manager": "tsx src/commands/provisionManager.ts",
     "test": "vitest run",
